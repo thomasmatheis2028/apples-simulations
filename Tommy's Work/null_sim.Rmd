@@ -1,0 +1,121 @@
+---
+title: "sim_study2"
+output: html_document
+---
+
+```{r}
+null_rcbd <- function(blocks, treatments, sigma_b, sigma_e) {
+  
+  data <- expand.grid(
+    block = factor(1:blocks),
+    treatment = factor(1:treatments)
+  )
+  
+  b_j <- rnorm(blocks, 0, sigma_b)
+  
+  tau_i <- rep(0, treatments)
+  
+  diff_sigma <- c(1, 1, 1, 1, 2, 2, 3, 3)
+  
+  e <- rnorm(nrow(data), 0, sigma_e)
+  
+  data$response <- tau_i[data$treatment] + b_j[data$block] + e
+  
+  model <- aov(response ~ treatment + block, data)
+  
+  p_value <- anova(model) |>
+    tidy() |>
+    filter(term == "treatment") |>
+    pull(p.value)
+  
+  return (p_value < 0.05)
+}
+```
+
+```{r}
+set.seed(100)
+rcbd_map <- map_lgl(1:1000, ~ null_rcbd(7,8,1,1)) |>
+  mean() |>
+  print()
+```
+
+```{r}
+null_rcbd_assump <- function(
+  blocks,
+  treatments,
+  sigma_b,
+  sigma_e,
+  violation = "none"
+) {
+
+  data <- expand.grid(
+    block = factor(1:blocks),
+    treatment = factor(1:treatments)
+  )
+
+  b_j <- rnorm(blocks, 0, sigma_b)
+  
+  tau_i <- rep(0, treatments)
+
+  e <- switch(
+    violation,
+    none = rnorm(nrow(data), 0, sigma_e),           # normal errors      
+    heavy_tail = rt(nrow(data), df = 3) * sigma_e,  # heavy-tailed errors
+    skewed = rexp(nrow(data)) - 1,                  # exponential errors
+    outlier = {                                     # outliers
+      tmp <- rnorm(nrow(data), 0, sigma_e)
+      idx <- sample(nrow(data), ceiling(.05 * nrow(data)))
+      tmp[idx] <- tmp[idx] + 10 * sigma_e
+      tmp
+    },
+    heterogeneous = {                               # unequal variance
+      sigma_trt <- c(1, 1, 1, 1, 1, 2, 2, 3)
+      rnorm(
+        nrow(data),
+        mean = 0,
+        sd = sigma_trt[data$treatment]
+      )
+    }
+  )
+
+  data$response <- tau_i[data$treatment] + b_j[data$block] + e
+
+  model <- aov(response ~ treatment + block, data)
+
+  p_value <- anova(model) |>
+    tidy() |>
+    filter(term == "treatment") |>
+    pull(p.value)
+
+  p_value < 0.05
+}
+```
+
+```{r}
+set.seed(47)
+
+violations <- c(
+  "none",
+  "heavy_tail",
+  "skewed",
+  "outlier",
+  "heterogeneous"
+)
+
+error_rates <- map_dbl(violations, ~ {
+  v <- .x
+  map_lgl(
+    1:5000,
+    ~ null_rcbd_assump(7, 8, 1, 1, violation = v)
+  ) |>
+    mean()
+})
+
+results <- tibble(
+  violation = violations,
+  error_rate = error_rates
+)
+
+results
+```
+

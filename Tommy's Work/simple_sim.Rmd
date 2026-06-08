@@ -1,0 +1,27 @@
+---
+title: "sim_study1"
+output: html_document
+---
+
+```{r}
+norm_data <- function(mu, sigma, n) {
+  x <- rnorm(n,mu,sigma)
+  
+  x_bar <- mean(x)
+  s <- sd(x)
+  error <- qt(0.975, df = n-1) * s / sqrt(n)
+  
+  lower <- x_bar - error
+  upper <- x_bar + error
+
+  return ((lower <= mu) & (mu <= upper))
+}
+```
+
+```{r}
+set.seed(47)
+ci_map <- map_lgl(1:1000, ~ norm_data(5,2,50)) |>
+  mean() |>
+  print()
+```
+

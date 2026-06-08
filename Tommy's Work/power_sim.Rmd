@@ -1,0 +1,86 @@
+---
+title: "sim_study3"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(broom.mixed)
+```
+
+
+```{r}
+make_tau <- function(treatments, alpha_tilde) {
+
+  tau <- seq(-(treatments - 1)/2,
+             (treatments - 1)/2,
+             length.out = treatments)
+
+  tau <- tau * sqrt(alpha_tilde / mean(tau^2))
+
+  tau
+}
+```
+
+
+```{r}
+power_rcbd <- function(blocks, treatments, sigma_b, sigma_e, alpha_tilde) {
+  
+  data <- expand.grid(
+    block = factor(1:blocks),
+    treatment = factor(1:treatments)
+  )
+  
+  b_j <- rnorm(blocks, 0, sigma_b)
+  
+  tau_i <- make_tau(treatments, alpha_tilde)
+  
+  e <- rnorm(nrow(data), 0, sigma_e)
+  
+  data$response <- tau_i[data$treatment] + b_j[data$block] + e
+  
+  model <- aov(response ~ treatment + block, data)
+  
+  p_value <- anova(model) |>
+    tidy() |>
+    filter(term == "treatment") |>
+    pull(p.value)
+  
+  return (p_value < 0.05)
+}
+```
+
+```{r}
+set.seed(100)
+power_map <- map_lgl(1:1000, ~ power_rcbd(7,8,1,1,0.2)) |>
+  mean() |>
+  print()
+```
+
+```{r}
+set.seed(100)
+alpha_grid <- seq(0, 1, by = 0.1)
+
+power_curve <- tibble(alpha_tilde = alpha_grid) |>
+  mutate(power = map_dbl(alpha_tilde, function(alpha) {
+    map_lgl(1:5000,~ power_rcbd(7, 8, 1, 1, alpha_tilde = alpha)) |>
+        mean()
+      }))
+```
+
+```{r}
+ggplot(power_curve,
+       aes(x = alpha_tilde, y = power)) +
+  geom_line() +
+  geom_point() +
+  geom_hline(yintercept = 0.05, linetype = "dashed") +
+  geom_hline(yintercept = 0.80, linetype = "dashed") +
+  labs(
+    x = expression(tilde(alpha)),
+    y = "Power",
+    title = "Power Curve for RCBD Treatment Test"
+  ) +
+  ylim(0, 1) +
+  theme_bw()
+```
+

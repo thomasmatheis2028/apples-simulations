@@ -1,0 +1,95 @@
+---
+title: "EDA"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(patchwork)
+library(lme4)
+library(emmeans)
+library(broom.mixed)
+library(lsmeans)
+library(multcomp)
+```
+
+```{r}
+apples_data <- read_csv("apples.csv", skip = 3)
+colnames(apples_data) = c("rep", "rootstock", "survival", "tcsa", "tot_fruit", "yield_2023", "cum_yield")
+```
+
+```{r}
+a1 <- apples_data |>
+  filter(rep == 1) |>
+  ggplot(aes(x = rootstock, y = cum_yield)) +
+    geom_bar(stat = "identity", fill = "#CC0000") +
+    labs(
+      x = "Rootstock",
+      y = "Cumulative Yield",
+      subtitle = "Rep 1"
+    ) +
+    theme_bw()
+
+a2 <- apples_data |>
+  filter(rep == 2) |>
+  ggplot(aes(x = rootstock, y = cum_yield)) +
+    geom_bar(stat = "identity", fill = "#CC0000") +
+    labs(
+      x = "Rootstock",
+      y = NULL,
+      subtitle = "Rep 2"
+    ) +
+    theme_bw()
+
+bar_plot <- a1 + a2
+
+ggsave("apples_cum_yield.png", bar_plot, width = 12)
+```
+
+
+```{r}
+lmer_model <- lmer(cum_yield ~ rootstock + (1 | rep), data = apples_data)
+
+aov_model <- aov(cum_yield ~ rootstock + rep, data = apples_data)
+
+anova(lmer_model) |>
+  tidy()
+
+anova(aov_model) |>
+  tidy()
+
+plot(lmer_model)
+qqnorm(resid(lmer_model))
+qqline(resid(lmer_model))
+
+plot(aov_model)
+```
+
+```{r}
+emm_lmer <- emmeans(lmer_model, pairwise ~ rootstock, adjust = "tukey", infer = c(TRUE, TRUE))
+tukey_lmer <- as.data.frame(emm_lmer$contrasts)
+```
+
+```{r}
+trt_means <- apples_data |>
+  group_by(rootstock) |>
+  summarize(
+    across(
+      c(tcsa, tot_fruit, yield_2023, cum_yield),
+      mean,
+      .names = "{.col}"
+    )
+  )
+
+resp_means <- trt_means |>
+  summarize(
+    across(
+      c(tcsa, tot_fruit, yield_2023, cum_yield),
+      ~ mean(.x),
+      .names = "mean_{.col}"
+    )
+  )
+
+VarCorr(lmer_model)
+```
+

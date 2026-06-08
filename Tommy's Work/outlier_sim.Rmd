@@ -1,0 +1,48 @@
+---
+title: "outlier_sim"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(broom)
+
+outlier_rcbd <- function(blocks, treatments, beta_b, sigma_e, sigma_G, pi) {
+  
+  data <- expand.grid(
+    block = factor(1:blocks),
+    treatment = factor(1:treatments)
+  )
+  
+  alpha_t <- rep(0, treatments)
+  
+  G <- rnorm(pi * rnorm(data), 0, sigma_G * sigma_e)
+  
+  e <- rnorm((1-pi) * nrow(data), 0, sigma_e) + G
+  
+  data$response <- alpha_t[data$treatment] + beta_b[data$block] + e
+  
+  model <- aov(response ~ treatment + block, data)
+  
+  p_value <- anova(model) |>
+    tidy() |>
+    filter(term == "treatment") |>
+    pull(p.value)
+  
+  return (p_value < 0.05)
+}
+```
+
+```{r}
+set.seed(100)
+
+beta_b <- c(-5, -3, -1, 0, 1, 3, 5)
+
+pi_grid <- seq(0, 0.3, by = 0.05)
+
+outlier_pi_curve <- tibble(pi_vals = pi_grid) |>
+  mutate(t1er = map_dbl(pi_vals, function(pi) {
+    map_lgl(1:1000,~ outlier_rcbd(7, 8, beta_b, 1, 100, pi)) |>
+        mean()
+      }))
+```
