@@ -1,0 +1,226 @@
+---
+title: "Simulation Study"
+output: html_document
+date: "2026-05-28"
+---
+#package libraries
+```{r}
+library(emmeans)
+library(multcompView)
+library(dplyr)
+library(lsmeans)
+library(ggplot2)
+library(lme4)
+```
+
+#Simple Simulation Study
+```{r}
+set.seed(001)
+
+n_simulations = 50000
+
+n_observations = 50 
+
+true_mean <- 5
+
+single_simulation <- function(n) {
+  x <- rnorm(50, mean = 5, sd = 2)
+
+  #T-test
+  CI <- t.test(x)$conf.int
+  
+  return(c(lower = CI[1], upper = CI[2]))
+}
+
+results <- replicate(n_simulations, single_simulation(n_observations))
+
+results_df <- as.data.frame(t(results))
+
+head(results_df)
+
+is_inside <- (true_mean >= results_df$lower) & (true_mean <= results_df$upper)
+print((n_simulations - sum(is_inside))/n_simulations)
+
+
+```
+
+#Complex Simulation (RCBD)
+```{r}
+#set seed 
+set.seed(002)
+
+n_simulations <- 4000
+
+#Designate Number of Treatments and Blocks
+n_blocks = 7
+
+n_treatment = 8
+
+#Simulation for RCBD
+single_RCBD_Simulation <- function(n) { 
+ 
+
+# Build treatment and block structure
+  treatments <- rep(1:n_treatment, times = n_blocks)   
+  blocks     <- rep(1:n_blocks, each = n_treatment)
+  
+
+#Designate Values for RCBD
+Mu <- 0 
+Tau <- c(0,0,0,0,0,0,0,0) 
+Beta <- rep(rnorm(n_blocks, 0, 3), each = n_treatment)
+Sigma <- rnorm(n_treatment * n_blocks, 0, 3)
+
+  x <- Mu + Tau + Beta + Sigma
+  
+  
+#Build DataFrame for fake data
+  sim_data <- data.frame(
+    x = x, 
+    treatment = as.factor(treatments),
+    block = as.factor(blocks)
+  )
+  
+  
+  #Fitting of RCBD Model
+  model <- aov(x ~ treatment + block, data = sim_data ) 
+  
+  
+  p_value <- summary(model)[[1]]["treatment", "Pr(>F)"]
+  return(p_value)
+  
+}
+
+results <- replicate(n_simulations, single_RCBD_Simulation())
+
+results_df <- data.frame(p_value = results)
+
+sum(results_df$p_value < 0.05)
+
+# View first few p-values
+head(results_df)
+
+# Full summary
+summary(results_df)
+
+# Count significant results
+cat("Significant results:", sum(results_df$p_value < 0.05), "\n")
+cat("Type I error rate:", mean(results_df$p_value < 0.05), "\n")
+
+```
+
+
+#Finding Sigma Using Target R2
+```{r}
+set.seed(002)
+n_simulations = 5000
+n_T <- 7
+n_B <- 8
+Mu  <- 120  # you need a grand mean
+
+alpha   <- c(-3, -2, -1, 0, 1, 2, 3)
+#alpha_t <- alpha - mean(alpha)
+
+beta   <- c(-5, 4, -7, 6, 8, 12, -13, 3)
+beta_b <- beta - mean(beta)
+
+V_tb     <- outer(alpha, beta_b, function(a,b) (Mu + a + b)^2)        
+V_bar    <- mean(V_tb)     
+R2_target <- 0.5
+
+# Cell means matrix
+mu_matrix <- outer(alpha, beta, function(a, b) Mu + a + b)
+
+# Signal
+S <- sum((mu_matrix - mean(mu_matrix))^2)
+
+# Solve for sigma²
+sigma2 <- S * (R2_target - 1) /
+          (V_bar * ((n_T + n_B - 2) - R2_target * (n_T * n_B - 1)))
+
+sigma <- sqrt(sigma2)
+
+cat("S      =", round(S, 4),      "\n")
+cat("sigma² =", round(sigma2, 4), "\n")
+cat("sigma  =", round(sigma, 4),  "\n")
+
+# Verify by plugging back into R²_theory formula (should equal 0.5)
+R2_check <- (S + (n_T + n_B - 2) * sigma2 * V_bar) /
+            (S + (n_T * n_B - 1) * sigma2 * V_bar)
+
+cat("R²_theory check =", round(R2_check, 4), "\n")
+```
+
+#Run the simulation
+```{r}
+set.seed(002)
+ #creates sigma^2V_tb
+Var_matrix <- sigma2 * V_tb
+
+#Creates the a and b values
+a_matrix <- (1 / sqrt(Var_matrix)) * sqrt(log(1 + Var_matrix / mu_matrix^2))
+
+b_matrix <- log(mu_matrix) - a_matrix * mu_matrix - ((a_matrix^2 * Var_matrix) / 2)
+
+#function used to simulate the data 
+
+run_once <- function() {
+  Y1 <- matrix(rnorm(n_T * n_B, mean = as.vector(mu_matrix), sd =sqrt(Var_matrix)), nrow = n_T, ncol = n_B)
+  
+  Y2 <- exp(a_matrix * Y1 + b_matrix)
+  
+  Y3 <- log(Y2)
+  
+  Y4 <- exp(Y1)
+#Reshape the data to be more user friendly 
+  
+make_df <- function(Y_mat, label) {
+  data.frame(
+    y         = as.vector(Y_mat),
+    treatment = as.factor(rep(1:n_T, times = n_B)),
+    block     = as.factor(rep(1:n_B, each  = n_T)),
+    version   = label
+  )
+}
+
+dat <- rbind(
+  make_df(Y1, "Y1_normal"),
+  make_df(Y2, "Y2_lognormal"),
+  make_df(Y3, "Y3_log_Y2"),
+  make_df(Y4, "Y4_exp_Y1")
+)
+
+#Running Analysis on the Simulated Data
+
+versions <- c("Y1_normal", "Y2_lognormal", "Y3_log_Y2", "Y4_exp_Y1")
+
+results <- lapply(versions, function(v) {
+  d     <- subset(dat, version == v)
+  model <- aov(y ~ treatment + block, data = d)
+  s     <- summary(model)[[1]]
+  p_val  <- s["treatment", "Pr(>F)"]
+  f_stat <- s["treatment", "F value"]
+  r2     <- 1 - s["Residuals", "Sum Sq"] / sum(s[, "Sum Sq"])
+  data.frame(versions = v, p_value = p_val, f_stat = f_stat, r2 = r2)
+})
+
+do.call(rbind, results)
+
+}
+all_results <- do.call(rbind, replicate(n_simulations, run_once(), simplify = FALSE))
+summary_tbl5 <- all_results %>%
+  group_by(versions) %>%
+  summarise(
+    power   = mean(p_value < 0.05),
+    mean_F  = mean(f_stat),
+    mean_R2 = mean(r2),
+    sd_R2   = sd(r2)
+  )
+```
+
+#Quick Notes for reference 
+#summary_tbl1 var = 1 
+#summary_tbl2 var = (Mu + alpha_t + beta_b)^2) outer(alpha_t, beta_b, function(a, b) (Mu + a + b)^2)
+#summary_tbl3 var = (Mu + alpha_t)^2
+#summary_tbl4 var = (alpha_t)^2
+#summary_tbl5 var = (beta_b)^2

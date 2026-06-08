@@ -1,0 +1,98 @@
+---
+title: "Apples"
+output: html_document
+date: "2026-05-27"
+---
+
+#Packages
+```{r}
+library(emmeans)
+library(multcompView)
+library(multcomp)
+library(dplyr)
+library(lsmeans)
+library(ggplot2)
+library(lme4)
+```
+#Load in Dataset 
+```{r}
+library(readxl)
+Apples1_1 <- read_excel("Downloads/DRUMS work/Apples Project/Apples1.1.xlsx")
+```
+
+
+#Step 1: Create New Data Frames
+```{r setup, include=FALSE}
+#Create new DFs
+
+basic_df1 <- Apples1_1 %>%
+  filter(Rep == 1)
+
+basic_df2 <- Apples1_1 %>%
+  filter(Rep == 2)
+```
+
+#Step 2: Create Barchart for Rep 1
+```{r}
+#Rep 1 Barchart
+ggplot(basic_df1, aes(x =Rootstock, y =`Total # Fruit`, fill = factor(Rep))) +
+  geom_bar(stat = "identity",) +
+  xlab("Treatment") + ylab("Mean Total Fruit") +
+  labs(fill = "Rep")
+ggsave("Plot_Rep1.png")
+```
+
+#Step 3: Create Barchart for Rep 2
+```{r}
+#Rep 2 Barchart
+ggplot(basic_df2, aes(x =Rootstock, y =`Total # Fruit`, fill = factor(Rep))) +
+  geom_bar(stat = "identity",) +
+  xlab("Treatment") + ylab("Mean Total Fruit") +
+  labs(fill = "Rep")
+ggsave("Plot_Rep2.png")
+```
+
+#Step 4: Look at model
+```{r}
+model_1 <- lmer(`Total # Fruit` ~ Rootstock + (1|Rep), data = Apples1_1)
+
+summary(model_1)
+
+plot(model_1)
+
+
+
+
+
+```
+
+#Step 5: Anova 
+```{r}
+#Find ANOVA 
+Model_1_AOV <- aov(`Total # Fruit` ~ Rootstock + (1|Rep), data = Apples1_1)
+
+summary(Model_1_AOV)
+
+plot(Model_1_AOV)
+```
+
+#Running Tukey's HSD Pairwise
+```{r}
+#Tukey Pairwise model for AOV
+
+tukey_results <- TukeyHSD(Model_1_AOV)
+
+tukey_results$Rootstock[
+  tukey_results$Rootstock[, "p adj"] < 0.05,
+]
+```
+
+#Running Tukey's HSD Single
+```{r}
+emmeans_results <- emmeans(model_1, pairwise ~ Rootstock, adjust = "Tukey")
+
+print(emmeans_results)
+
+
+```
+
