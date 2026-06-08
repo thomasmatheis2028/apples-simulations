@@ -7,7 +7,7 @@ output: html_document
 library(tidyverse)
 library(broom)
 
-outlier_rcbd <- function(blocks, treatments,
+outlier_rcbd1 <- function(blocks, treatments,
                          beta_b, sigma_e,
                          sigma_G, pi) {
 
@@ -23,7 +23,7 @@ outlier_rcbd <- function(blocks, treatments,
   outlier <- runif(n) < pi
 
   e <- rnorm(n, 0, sigma_e)
-  e[outlier] <- rnorm(sum(outlier), 0, sigma_G * sigma_e)
+  e[outlier] <- rnorm(sum(outlier), 0, sigma_G)
 
   data$response <-
     alpha_t[as.integer(data$treatment)] +
@@ -46,17 +46,101 @@ set.seed(100)
 
 beta_b <- c(-5, -3, -1, 0, 1, 3, 5)
 
-pi_grid <- seq(0, 0.2, by = 0.02)
+pi_grid <- seq(0, 0.1, by = 0.01)
 
 outlier_pi_curve <- tibble(pi_vals = pi_grid) |>
   mutate(t1er = map_dbl(pi_vals, function(pi) {
-    map_lgl(1:10000,~ outlier_rcbd(7, 8, beta_b, 8, 10, pi)) |>
+    map_lgl(1:5000, ~ outlier_rcbd1(7, 8, beta_b, 4, 100, pi)) |>
         mean()
       }))
 ```
 
 ```{r}
 ggplot(outlier_pi_curve,
+       aes(x = pi_vals, y = t1er)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    x = expression(pi),
+    y = "Type I Error Rate",
+    title = "Type I Error Rate for Data With Extreme Outliers"
+  ) +
+  ylim(0, 0.1) +
+  theme_bw()
+```
+
+```{r}
+set.seed(100)
+
+pi_grid1 <- seq(0, 1, by = 0.05)
+
+outlier_pi_curve1 <- tibble(pi_vals = pi_grid1) |>
+  mutate(t1er = map_dbl(pi_vals, function(pi) {
+    map_lgl(1:5000, ~ outlier_rcbd1(7, 8, beta_b, 4, 100, pi)) |>
+        mean()
+      }))
+```
+
+```{r}
+ggplot(outlier_pi_curve1,
+       aes(x = pi_vals, y = t1er)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    x = expression(pi),
+    y = "Type I Error Rate",
+    title = "Type I Error Rate for Data With Extreme Outliers"
+  ) +
+  ylim(0, 0.1) +
+  theme_bw()
+```
+
+```{r}
+outlier_rcbd2 <- function(blocks, treatments,
+                         beta_b, sigma_e, pi) {
+
+  data <- expand.grid(
+    block = factor(1:blocks),
+    treatment = factor(1:treatments)
+  )
+
+  alpha_t <- rep(0, treatments)
+
+  n <- nrow(data)
+
+  outlier <- runif(n) < pi
+
+  e <- rnorm(n, 0, sigma_e)
+  e[outlier] <- rep(100, sum(outlier))
+
+  data$response <-
+    alpha_t[as.integer(data$treatment)] +
+    beta_b[as.integer(data$block)] +
+    e
+
+  model <- aov(response ~ treatment + block, data = data)
+
+  p_value <- anova(model) |>
+    broom::tidy() |>
+    dplyr::filter(term == "treatment") |>
+    dplyr::pull(p.value)
+
+  p_value < 0.05
+}
+```
+
+```{r}
+set.seed(100)
+
+outlier_pi_curve2 <- tibble(pi_vals = pi_grid) |>
+  mutate(t1er = map_dbl(pi_vals, function(pi) {
+    map_lgl(1:5000, ~ outlier_rcbd2(7, 8, beta_b, 4, pi)) |>
+        mean()
+      }))
+```
+
+```{r}
+ggplot(outlier_pi_curve2,
        aes(x = pi_vals, y = t1er)) +
   geom_line() +
   geom_point() +
