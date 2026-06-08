@@ -1,0 +1,69 @@
+---
+title: "apple08"
+output: html_document
+date: "2026-06-01"
+---
+
+```{r setup, include=FALSE}
+set.seed(100)
+
+nsim <- 5000
+num_treat <- 8
+num_blocks <- 7
+var <- 0.8
+alpha <- 0.8
+
+generate_data <- function(
+    blocks = num_blocks,
+    treat = num_treat,
+    mu = 0,
+    sigma_block = 1,
+    sigma_error = 1,
+    a_level = alpha
+    
+) {
+  
+  dat <- expand.grid(
+    Rep = factor(1:blocks),
+    Rootstock = factor(1:treat)
+  )
+  
+  beta_j <- rnorm(blocks, 0, sigma_block)
+  tau <- rep(0, treat)
+  eps <- rnorm(nrow(dat), 0, sigma_error)
+  
+  rep_idx <- as.integer(dat$Rep)
+  trt_idx <- as.integer(dat$Rootstock)
+  
+  dat$y <- mu +
+    beta_j[rep_idx] +
+    tau[trt_idx] +
+    eps
+  
+  dat
+}
+
+p_values <- numeric(nsim)
+
+for (s in 1:nsim) {
+  
+  dat <- generate_data(
+    blocks,
+    treat,
+    
+  )
+  
+  fit <- aov(y ~ Rootstock + Rep, data = dat)
+  
+  p_values[s] <- summary(fit)[[1]]["Rootstock", "Pr(>F)"]
+}
+
+power <- mean(p_values < alpha)
+
+power
+
+print("done")
+
+
+```
+

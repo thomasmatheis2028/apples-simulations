@@ -1,0 +1,50 @@
+---
+title: "a08final"
+output: html_document
+date: "2026-06-03"
+---
+
+```{r setup, include=FALSE}
+set.seed(22)
+
+n_simulations <- 5000
+
+num_blocks <- 7 
+num_treatments <- 8 
+
+tau_variance <- 0.8
+
+RCBD_simulation <- function(){
+  treatments <- rep(1:num_treatments, times = num_blocks)
+  blocks <- rep(1:num_blocks, each = num_treatments)
+
+  tau_raw <- c(1,2,6,3,8,9,-10,5)
+  tau_centered <- tau_raw - mean(tau_raw)
+  tau_scaled <- tau_centered*sqrt(tau_variance/mean(tau_centered^2))
+  
+  mu <- 0
+  beta <- rep(rnorm(num_blocks, mean = 0, sd = 1), each = num_treatments)
+  sigma <- rnorm(num_treatments*num_blocks, mean = 0, sd = 1)
+  
+  y <- mu + tau_scaled[treatments]+beta+sigma
+  
+  sim_data <- data.frame(
+    y = y,
+    treatment = as.factor(treatments),
+    block = as.factor(blocks)
+  )
+  
+  model <- aov(y~treatment+block, data = sim_data)
+  p_value <- summary(model)[[1]]["treatment", "Pr(>F)"]
+  return(p_value)
+}
+
+results <- replicate(n_simulations, RCBD_simulation())
+results_df <- data.frame(p_value = results)
+
+head(results_df)
+summary(results_df)
+cat("Significant Results", sum(results_df$p_value<0.05), "\n")
+cat("Estimated Power", mean(results_df$p_value<0.05), "\n")
+
+```

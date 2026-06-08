@@ -1,0 +1,84 @@
+---
+title: "EDA"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(lme4)
+
+apples_data <- read.csv("2018PinkLadyApples.csv",skip=3)
+
+str(apples_data)
+
+summary(apples_data)
+
+ggplot(apples_data, aes(x= `X2023.Yield.Kg`)) +
+  geom_histogram()
+
+
+p1 <- apples_data |>
+  filter(Rep == 1) |>
+  ggplot(aes(x=Rootstock, y=X2023.Yield.Kg)) +
+  labs(
+    x= "Rootstock", 
+    y= "2023 Yield-Kg",
+    title= "2023 Yield by Rootstock: Rep 1") +
+  geom_bar(stat="identity", fill="deepskyblue3")
+  ggsave("yield_rep1.png", plot = p1, width = 8, height = 6, dpi = 300)
+
+
+p2 <- apples_data |>
+  filter(Rep == 2) |>
+  ggplot(aes(x=Rootstock, y=X2023.Yield.Kg)) +
+  labs(
+    x= "Rootstock", 
+    y= "2023 Yield-Kg",
+    title= "2023 Yield by Rootstock: Rep 2") +
+  geom_bar(stat="identity", fill="deepskyblue3")
+  ggsave("yield_rep2.png", plot = p2, width = 8, height = 6, dpi = 300)
+
+```
+```{r}
+#model implementation
+
+model_yield <- lmer(X2023.Yield.Kg ~ Rootstock + (1|Rep), data = apples_data)
+
+summary(model_yield)
+plot(model_yield)
+
+
+#model_yield_log <- lmer(log(X2023.Yield.Kg) ~ Rootstock + (1|Rep), data = apples_data)
+#summary(model_yield_log)
+#plot(model_yield_log)
+
+```
+```{r}
+anova(model_yield)
+
+aov_model <- aov(X2023.Yield.Kg ~ Rootstock + (1|Rep), data = apples_data)
+plot(aov_model)
+```
+
+```{r}
+#tukey 
+
+tukey_result = TukeyHSD(aov_model)
+print(tukey_result)
+
+print("done")
+
+library(emmeans)
+
+emm <- emmeans(model_yield, pairwise ~ "Rootstock", adjust = "Tukey")
+print(emm)
+
+```
+```{r}
+#simulation study 
+
+#simple: confidence intervals 
+
+
+```
+
