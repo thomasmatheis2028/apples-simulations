@@ -1,0 +1,67 @@
+---
+title: "Harder_Simulation"
+output: html_document
+date: "2026-05-28"
+---
+
+```{r}
+
+set.seed(100)
+
+```
+
+# Design
+```{r}
+
+reps <- 7 
+
+treatments <- c("CG.3010", "CG.4010", "CG.4088", "CG.4288", "CG.4292", "G.202", "G.41", "G.814")
+
+nsim <- 1000
+
+p_values <- numeric(nsim)
+
+
+```
+
+```{r}
+for (s in 1:nsim) {
+
+  # Create RCBD layout
+  dat <- expand.grid(
+    Rep = factor(1:reps),
+    Rootstock = factor(treatments)
+  )
+
+  # PARAMETERS under H0
+  mu <- 0
+
+  # block effects (beta_j)
+  beta_j <- rnorm(reps, mean = 0, sd = 5)
+  names(beta_j) <- levels(dat$Rep)
+
+  # random error (epsilon_ij)
+  eps <- rnorm(nrow(dat), mean = 0, sd = 10)
+
+  # treatment effect tau_i = 0 under null
+  tau_i <- 0
+
+  # generate response
+  dat$y <- mu +
+           tau_i +
+           beta_j[dat$Rep] +
+           eps
+
+  # ANOVA model
+  fit <- aov(y ~ Rootstock + Rep, data = dat)
+
+  # store p-value for treatment
+  p_values[s] <- summary(fit)[[1]]["Rootstock", "Pr(>F)"]
+}
+
+# Type I error rate
+mean(p_values < 0.05)
+```
+
+
+

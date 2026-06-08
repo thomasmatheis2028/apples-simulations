@@ -1,0 +1,75 @@
+---
+title: "alpha_v_power_simulation"
+output: html_document
+date: "2026-06-01"
+---
+
+```{r}
+set.seed(100)
+
+reps <- 7
+ntrt <- 8
+nsim <- 5000
+
+generate_rcbd <- function(reps, ntrt,
+                          mu = 0,
+                          sd_block = 5,
+                          sd_error = 10,
+                          tau_value = 5) {
+
+  dat <- expand.grid(
+    Rep = factor(1:reps),
+    Rootstock = factor(1:ntrt)
+  )
+
+  beta_j <- rnorm(reps, 0, sd_block)
+
+  tau <- c(0, rep(tau_value, ntrt - 1))
+
+  eps <- rnorm(nrow(dat), 0, sd_error)
+
+  rep_idx <- as.integer(dat$Rep)
+  trt_idx <- as.integer(dat$Rootstock)
+
+  dat$y <- mu +
+    beta_j[rep_idx] +
+    tau[trt_idx] +
+    eps
+
+  dat
+}
+
+p_values <- numeric(nsim)
+
+for (s in 1:nsim) {
+
+  dat <- generate_rcbd(reps, ntrt, tau_value = 5)
+
+  fit <- aov(y ~ Rootstock + Rep, data = dat)
+
+  p_values[s] <- summary(fit)[[1]]["Rootstock", "Pr(>F)"]
+}
+
+# Alpha values
+alpha_grid <- seq(0.01, 0.10, by = 0.01)
+
+# Power at each alpha
+power <- sapply(alpha_grid, function(a) {
+  mean(p_values < a)
+})
+
+# Alpha vs Power plot
+plot(alpha_grid, power,
+     type = "b",
+     pch = 19,
+     xlab = expression(alpha),
+     ylab = "Estimated Power",
+     main = expression("Power vs " * alpha))
+
+# Power at alpha = 0.06
+power_hat <- mean(p_values < 0.06)
+
+power_hat
+```
+
+

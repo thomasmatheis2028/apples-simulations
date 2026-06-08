@@ -1,0 +1,120 @@
+---
+title: "Untitled"
+output: html_document
+date: "2026-06-01"
+---
+```{r}
+set.seed(100)
+
+# Design parameters
+reps <- 7
+ntrt <- 8
+nsim <- 1000
+
+alpha_tilde <- 0.6   # FIXED name
+
+# Function to generate RCBD
+generate_rcbd <- function(reps, ntrt,
+                          mu = 0,
+                          sd_block = 5,
+                          sd_error = 10,
+                          effect = 0.6) {
+
+  dat <- expand.grid(
+    Rep = factor(1:reps),
+    Rootstock = factor(1:ntrt)
+  )
+
+  beta_j <- rnorm(reps, 0, sd_block)
+
+  tau <- c(0, rep(effect, ntrt - 1))
+
+  eps <- rnorm(nrow(dat), mean = 0, sd = sd_error)
+
+  rep_idx <- as.integer(dat$Rep)
+  trt_idx <- as.integer(dat$Rootstock)
+
+  # FIXED indexing
+  dat$y <- mu +
+           tau[trt_idx] +
+           beta_j[rep_idx] +
+           eps
+
+  dat
+}
+
+# Store p-values
+p_values <- numeric(nsim)
+
+for (s in 1:nsim) {
+
+  dat <- generate_rcbd(
+    reps = reps,
+    ntrt = ntrt,
+    effect = 5   # this defines the true treatment effect (power setting)
+  )
+
+  fit <- aov(y ~ Rootstock + Rep, data = dat)
+
+  p_values[s] <- summary(fit)[[1]]["Rootstock", "Pr(>F)"]
+}
+
+# POWER (not Type I error)
+power_hat <- mean(p_values < alpha_tilde)
+
+power_hat
+```
+```{r}
+set.seed(10)
+n_simulations <- 5000
+
+# Treatments and Blocks
+n_treatments <- 8 
+n_blocks <- 7
+
+# Define Tau variance
+tau_var <- 0.6
+
+# Building formula
+RCBD_simulation <- function() {
+  
+  # Build the treatment and block structures
+  treatments <- rep(1:n_treatments, times = n_blocks)
+  blocks <- rep(1:n_blocks, each = n_treatments)
+  
+  # Tau: cetnered and scaled to exact target variance
+  tau_raw <- c(-3, -2, -1, 0, 1, 2, 3, 4)
+  tau_centered <- tau_raw - mean(tau_raw)
+  tau_scaled <- tau_centered * sqrt(tau_var / mean(tau_centered^2))
+  
+  mu <- 0 
+  beta <- rep(rnorm(n_blocks, mean = 0, sd = 1), each = n_treatments)
+  sigma <- rnorm(n_treatments * n_blocks, mean = 0, sd = 1)
+  
+  y <- mu + tau_scaled[treatments] + beta + sigma
+  
+  # Build the data frame 
+  sim_data <- data.frame(
+    y = y, 
+    treatment = as.factor(treatments), 
+    block = as.factor(blocks)
+  )
+  
+  # Fit RCBD model
+  model <- aov(y ~ treatment + block, data = sim_data)
+  p_value <- summary(model)[[1]]["treatment", "Pr(>F)"]
+  return(p_value)
+}
+
+  # Run multiple simulations
+  results <- replicate(n_simulations, RCBD_simulation())
+  results_df <- data.frame(p_value = results)
+  
+  # Summary output
+  head(results_df)
+  summary(results_df)
+  cat("Significant results: ", sum(results_df$p_value < 0.05), "\n")
+  cat("Estimated Power: " , mean(results_df$p_value < 0.05), "\n")
+
+```
+

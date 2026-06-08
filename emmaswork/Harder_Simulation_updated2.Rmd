@@ -1,0 +1,53 @@
+---
+title: "Untitled"
+output: html_document
+date: "2026-06-01"
+---
+```{r}
+set.seed(100)
+
+reps <- 7
+ntrt <- 8
+nsim <- 1000
+var <- 0.6
+
+generate_rcbd <- function(reps, ntrt,
+                          mu = 0,
+                          sd_block = 5,
+                          sd_error = 10) {
+
+  dat <- expand.grid(
+    Rep = factor(1:reps),
+    Rootstock = factor(1:ntrt)
+  )
+
+  beta_j <- rnorm(reps, mean = 0, sd = sd_block)
+  names(beta_j) <- levels(dat$Rep)
+
+  eps <- rnorm(nrow(dat), mean = 0, sd = sd_error)
+
+  dat$y <- mu +
+           beta_j[dat$Rep] +
+           eps
+
+  dat
+}
+
+p_values <- numeric(nsim)
+
+for (s in 1:nsim) {
+
+  dat <- generate_rcbd(
+    reps = reps,
+    ntrt = ntrt
+  )
+
+  fit <- aov(y ~ Rootstock + Rep, data = dat)
+
+  p_values[s] <- summary(fit)[[1]]["Rootstock", "Pr(>F)"]
+}
+
+# Estimated Type I error rate
+mean(p_values < 0.05)
+```
+

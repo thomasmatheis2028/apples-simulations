@@ -1,0 +1,35 @@
+---
+title: "Harder_Simulation_updated"
+output: html_document
+date: "2026-06-01"
+---
+
+```{r}
+nsim <- 5000
+p_values <-numeric(nsim)
+```
+
+```{r}
+for (s in 1:nsim) {
+        dats <- expand.grid( 
+          Rep = factor(1:reps), 
+          Rootstock = factor(treatments)
+        )
+  mu <- 0 
+  
+  beta_j <- rnorm(reps, mean = 0, sd = 5)
+  names(beta_j) <- levels(dats$Rep)
+  eps <- rnorm(nrow(dat), mean = 0, sd= 10)
+  dat$y <- mu + 
+    beta_j[dat$Rep] + 
+    eps
+  fit <- aov(y ~ Rootstock + Rep, data = dat)
+  p_values[s] <- summary(fit)[[1]]["Rootstock", "Pr(>F)"]
+}
+```
+
+```{r}
+mean(p_values < 0.05)
+```
+
+

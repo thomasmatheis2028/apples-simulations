@@ -1,0 +1,78 @@
+---
+title: "Apples"
+output: html_document
+---
+#packages Used
+```{r}
+library(janitor)
+library(dplyr)
+library(ggplot2)
+library(lme4)
+library(emmeans)
+```
+
+
+
+
+```{r}
+#Import dataset
+Apples_Data <- Apples_data[-c(1,2,3),]
+
+Apples_Data <- Apples_Data %>% row_to_names(row_number = 1)
+
+```
+
+```{r}
+colnames(Apples_Data)
+Rep1_DF <- Apples_Data %>%
+  filter(Rep == 1)
+```
+
+```{r}
+ggplot(Rep1_DF, aes(x = Rootstock, y = `TCSA (cm2)` )) +
+                    geom_bar(stat = "identity", fill = "hotpink2") +
+                     xlab("Treatment")+ ylab("TCSA")+
+                      labs(fill = "Rep")
+```
+```{r}
+colnames(Apples_Data)
+Rep2_DF <- Apples_Data %>%
+  filter(Rep == 2)
+```
+
+```{r}
+ggplot(Rep2_DF, aes(x = Rootstock, y = `TCSA (cm2)`,)) +
+                    geom_bar(stat = "identity", fill = "darkorchid2") +
+                     xlab("Treatment")+ ylab("TCSA")+
+                      labs(fill = "Rep")
+```
+#model 
+```{r}
+Apples_Data$`TCSA (cm2)` <- as.numeric(as.character(Apples_Data$`TCSA (cm2)`))
+
+model_TCSA <-lmer(`TCSA (cm2)` ~ Rootstock + (1|Rep), data = Apples_Data)
+
+summary(model_TCSA) 
+plot(model_TCSA)
+```
+```{r}
+Apples_Data$Rep <- as.numeric(Apples_Data$Rep)
+
+Model_TCSA_AOV <- aov(`TCSA (cm2)` ~ Rootstock + (1|Rep), data = Apples_Data)
+
+summary(Model_TCSA_AOV)
+plot(Model_TCSA_AOV)
+
+```
+```{r}
+TukeyHSD(Model_TCSA_AOV)
+emm <- emmeans(model_TCSA, ~ Rootstock)
+
+pairs(emm, adjust = "tukey")
+
+model_1 <-lmer(`TCSA (cm2)` ~ Rootstock + (1|Rep), data = Apples_Data)
+
+emmeans(model_1, ~ Rootstock, adjust = "Tukey")
+```
+
+

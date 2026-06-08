@@ -1,0 +1,64 @@
+---
+title: "Simple_Simulation"
+output: html_document
+date: "2026-05-28"
+---
+# Set seed
+```{r}
+
+set.seed(100)
+
+```
+
+# Parameters
+```{r}
+
+n <- 50 
+
+mu_initial <- 0 
+
+variance <- 1
+
+sigma <- sqrt(variance)
+
+```
+
+# Number of Simulations
+```{r}
+
+nsim <- 1000
+
+```
+
+# Store results
+```{r}
+
+contains_mu <- logical(nsim)
+
+for (i in 1:nsim) {
+  
+  # Generate data from N(mu_initial, variance)
+  x <- rnorm(n, mean = mu_initial, sd = sigma)
+  
+  # Sample mean and SD
+  xbar <- mean(x)
+  s <- sd(x)
+  
+  # 95% confidence interval 
+  margin_error <- qt(0.975, df = n - 1) * s / sqrt(n)
+  
+  ci_lower <- xbar - margin_error 
+  ci_upper <- xbar + margin_error
+  
+  # Check if true mean is inside the CI
+  contains_mu[i] <- (mu_initial >= ci_lower) & (mu_intial <= ci_upper)
+}
+
+# Contain probability 
+coverage_rate <- mean(contains_mu)
+
+print(coverage_rate)
+
+```
+
+
