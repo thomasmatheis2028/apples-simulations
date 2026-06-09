@@ -63,7 +63,7 @@ ggplot(outlier_pi_curve,
   labs(
     x = expression(pi),
     y = "Type I Error Rate",
-    title = "Type I Error Rate for Data With Extreme Outliers"
+    title = "Type I Error Rate for Data With Extreme Normal Outliers"
   ) +
   ylim(0, 0.1) +
   theme_bw()
@@ -89,7 +89,7 @@ ggplot(outlier_pi_curve1,
   labs(
     x = expression(pi),
     y = "Type I Error Rate",
-    title = "Type I Error Rate for Data With Extreme Outliers"
+    title = "Type I Error Rate for Data With Extreme Normal Outliers"
   ) +
   ylim(0, 0.1) +
   theme_bw()
@@ -111,7 +111,7 @@ outlier_rcbd2 <- function(blocks, treatments,
   outlier <- runif(n) < pi
 
   e <- rnorm(n, 0, sigma_e)
-  e[outlier] <- rep(100, sum(outlier))
+  e[outlier] <- rep(10000, sum(outlier))
 
   data$response <-
     alpha_t[as.integer(data$treatment)] +
@@ -121,9 +121,9 @@ outlier_rcbd2 <- function(blocks, treatments,
   model <- aov(response ~ treatment + block, data = data)
 
   p_value <- anova(model) |>
-    broom::tidy() |>
-    dplyr::filter(term == "treatment") |>
-    dplyr::pull(p.value)
+    tidy() |>
+    filter(term == "treatment") |>
+    pull(p.value)
 
   p_value < 0.05
 }
@@ -147,7 +147,67 @@ ggplot(outlier_pi_curve2,
   labs(
     x = expression(pi),
     y = "Type I Error Rate",
-    title = "Type I Error Rate for Data With Extreme Outliers"
+    title = "Type I Error Rate for Data With Extreme Constant Outliers"
+  ) +
+  ylim(0, 0.1) +
+  theme_bw()
+```
+
+```{r}
+outlier_rcbd3 <- function(blocks, treatments,
+                         beta_b, sigma_e,
+                         gamma_G, pi) {
+
+  data <- expand.grid(
+    block = factor(1:blocks),
+    treatment = factor(1:treatments)
+  )
+
+  alpha_t <- rep(0, treatments)
+
+  n <- nrow(data)
+
+  outlier <- runif(n) < pi
+
+  e <- rnorm(n, 0, sigma_e)
+
+  e[outlier] <- rcauchy(sum(outlier), location = 0, scale = gamma_G)
+
+  data$response <-
+    alpha_t[as.integer(data$treatment)] +
+    beta_b[as.integer(data$block)] +
+    e
+
+  model <- aov(response ~ treatment + block, data = data)
+
+  p_value <- anova(model) |>
+    tidy() |>
+    filter(term == "treatment") |>
+    pull(p.value)
+
+  p_value < 0.05
+}
+```
+
+```{r}
+set.seed(100)
+
+outlier_pi_curve3 <- tibble(pi_vals = pi_grid) |>
+  mutate(t1er = map_dbl(pi_vals, function(pi) {
+    map_lgl(1:5000, ~ outlier_rcbd3(7, 8, beta_b, 4, 25, pi)) |>
+      mean()
+  }))
+```
+
+```{r}
+ggplot(outlier_pi_curve3,
+       aes(x = pi_vals, y = t1er)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    x = expression(pi),
+    y = "Type I Error Rate",
+    title = "Type I Error Rate for Data With Extreme Cauchy Outliers"
   ) +
   ylim(0, 0.1) +
   theme_bw()
