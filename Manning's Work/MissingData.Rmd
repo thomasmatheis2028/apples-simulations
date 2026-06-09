@@ -1,0 +1,53 @@
+---
+title: "Missing Data Simulation Study"
+output: html_document
+date: "2026-06-09"
+---
+
+#Build a simulated RCBD Dataset
+```{r}
+#Set Seed
+set.seed(42)
+
+#Set initial parameters (these can change)
+n_treatments <- 8
+n_blocks <- 7
+
+#Define Treatment and Block vectors
+treatments <- paste0("T", 1:n_treatments)
+blocks     <- paste0("Block", 1:n_blocks)
+
+#Treatment and block effects 
+treatment_effects <- c(1,2,3,4,5,6,7,8)
+block_effects <- c(1,1,1,1,1,1,1)
+error <- rnorm(n_treatments * n_blocks, 0, 3)
+
+#Build Dataframe
+rcbd_df <- expand.grid(
+  Treatment = treatments,
+  Block     = blocks)
+
+#Treatment Effects  
+rcbd_df$treatment_effect <- treatment_effects[as.numeric(factor(rcbd_df$Treatment))]
+
+#Block Effects
+rcbd_df$block_effect <- block_effects[as.numeric(factor(rcbd_df$Block))]
+
+#Response 
+rcbd_df$response <- rcbd_df$treatment_effect + 
+                    rcbd_df$block_effect + 
+                    error
+#Clean Up
+rcbd_df$treatment_effect <- NULL
+rcbd_df$block_effect     <- NULL
+
+rcbd_df$Treatment <- factor(rcbd_df$Treatment)
+rcbd_df$Block     <- factor(rcbd_df$Block)
+
+#Preview
+head(rcbd_df)
+
+```
+
+
+

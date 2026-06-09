@@ -39,7 +39,7 @@ complete.data <- mvrnorm(sample.size, mu, Sigma)
 
 #generating 50% missing data for each of the first three variables
 missing.percentage <- 0.5 #generating 50% missing data
-var.with.missing <- 1:1 #first three variables have missing data
+var.with.missing <- 1:3 #first three variables have missing data
 
 missing.percentage2 <- 0.25
 var.with.missing2 <- 3:3

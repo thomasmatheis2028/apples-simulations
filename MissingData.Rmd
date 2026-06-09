@@ -1,0 +1,99 @@
+---
+title: "Missing Data Simulation Study"
+output: html_document
+date: "2026-06-09"
+---
+#Packages Used
+```{r}
+library(mice)
+```
+
+#Build a simulated RCBD Dataset
+```{r}
+#Set Seed
+set.seed(42)
+
+#Set initial parameters (these can change)
+n_treatments <- 8
+n_blocks <- 7
+
+#Define Treatment and Block vectors
+treatments <- paste0("T", 1:n_treatments)
+blocks     <- paste0("Block", 1:n_blocks)
+
+#Treatment and block effects 
+treatment_effects <- c(1,2,3,4,5,6,7,8)
+block_effects <- c(1,1,1,1,1,1,1)
+error <- rnorm(n_treatments * n_blocks, 0, 3)
+
+#Build Dataframe
+RCDB_df <- expand.grid(
+  Treatment = treatments,
+  Block     = blocks)
+
+#Treatment Effects  
+RCDB_df$treatment_effect <- treatment_effects[as.numeric(factor(RCDB_df$Treatment))]
+
+#Block Effects
+RCDB_df$block_effect <- block_effects[as.numeric(factor(RCDB_df$Block))]
+
+#Response 
+RCDB_df$response <- RCDB_df$treatment_effect + 
+                    RCDB_df$block_effect + 
+                    error
+#Clean Up
+RCDB_df$treatment_effect <- NULL
+RCDB_df$block_effect     <- NULL
+
+RCDB_df$Treatment <- factor(RCDB_df$Treatment)
+RCDB_df$Block     <- factor(RCDB_df$Block)
+
+#Preview
+head(RCDB_df)
+
+```
+
+#MCAR RCBD data
+```{r}
+#Create new df to manipulate 
+MCAR_RCBD_df <- RCDB_df
+
+#Define percentage of missing data
+missing_percentage <- 0.10
+
+#Apply missing percentage to new df 
+n_missing <- round(nrow(MCAR_RCBD_df) * missing_percentage)
+
+missing_rows <- sample(1:nrow(MCAR_RCBD_df), size = n_missing, replace = FALSE)
+
+MCAR_RCBD_df$response[missing_rows] <- NA
+
+head(MCAR_RCBD_df)
+
+```
+
+#Mean Imputation
+```{r}
+mean_MCAR <- mean(MCAR_RCBD_df$response, na.rm = TRUE)
+
+mean_MCAR_RCBD_df <- MCAR_RCBD_df
+
+mean_MCAR_RCBD_df$response[is.na(mean_MCAR_RCBD_df$response)] <- mean_MCAR
+```
+
+#Multiple Imputation Using MICE
+```{r}
+imputed <- mice(MCAR_RCBD_df, m = 5, method = 'pmm', seed = 42)
+
+imputed_MCAR <- completed_df <- complete(imputed, action = 1)
+
+completed_all <- complete(imputed, action = "long")
+```
+
+#All of these codes are used to compare a single run, whereas we want to look at several iterations
+#Therefore new code must be needed in order to look at it over a certain number fo simulations. 
+
+
+
+
+
