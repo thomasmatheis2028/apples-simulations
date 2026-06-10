@@ -300,7 +300,7 @@ outlier_rcbd3 <- function(blocks, treatments, sigma_e, sigma_b,
 set.seed(100)
 
 outlier_pi_curve3 <- map_dfr(pi_grid, function(pi) {
-  map_dfr(1:5000, ~ outlier_rcbd3(7, 8, 3, 3, 25, pi)) |>
+  map_dfr(1:10000, ~ outlier_rcbd3(7, 8, 3, 3, 25, pi)) |>
     summarise(
       pi = pi,
       type1_error = mean(reject_F),
