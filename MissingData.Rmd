@@ -107,29 +107,28 @@ library(mice)
 ##################################################
 n_treatments <- 8
     n_blocks <- 7
-    block_effects <- rnorm(n_blocks, mean = 0, sd = 3)
     treatment_effects <- c(0,0,0,0,0,0,0,0)
 
 one_simulation <- function(
     treatment_effects,
     block_effects = rnorm(n_blocks, mean = 0, sd = 3),
-    missing_pct = 0.10,
+    missing_pct = 0.25,
     sigma = 3){
 
   ################################################
   # Generate RCBD
   ################################################
 
-  df <- expand.grid(
+  initial_df <- expand.grid(
     Treatment = factor(paste0("T",1:n_treatments)),
     Block = factor(paste0("B",1:n_blocks))
   )
 
 
-  df$response <-
-    treatment_effects[as.numeric(df$Treatment)] +
-    block_effects[as.numeric(df$Block)] +
-    rnorm(nrow(df),0,sigma)
+  initial_df$response <-
+    treatment_effects[as.numeric(initial_df$Treatment)] +
+    block_effects[as.numeric(initial_df$Block)] +
+    rnorm(nrow(initial_df),0,sigma)
 
   ################################################
   # Complete Data Analysis
@@ -137,7 +136,7 @@ one_simulation <- function(
 
   fit_complete <- aov(
     response ~ Treatment + Block,
-    data = df
+    data = initial_df
   )
 
   p_complete <-
@@ -147,7 +146,7 @@ one_simulation <- function(
   # MCAR Missingness
   ################################################
 
-  missing_df <- df
+  missing_df <- initial_df
 
   n_missing <- round(
     nrow(missing_df) * missing_pct
@@ -160,6 +159,7 @@ one_simulation <- function(
   )
 
   missing_df$response[missing_rows] <- NA
+
 
   ################################################
   # Mean Imputation
@@ -188,9 +188,9 @@ one_simulation <- function(
   
   linear_df <- missing_df
   
-  linear_df$response[is.na(missing_df$response)] <- predict(
+  linear_df$response[is.na(linear_df$response)] <- predict(
   lm(response ~ Treatment + Block, data = linear_df),
-  newdata = missing_df[is.na(linear_df$response), ]
+  newdata = linear_df[is.na(linear_df$response), ]
 )
   
  fit_linear <-  aov(
@@ -199,28 +199,6 @@ one_simulation <- function(
  
  p_linear <- anova(fit_linear)$`Pr(>F)`[1]
   
-  
-  ################################################
-  # MICE Imputation
-  ################################################
-
-  imp <- mice(
-    missing_df,
-    m = 5,
-    method = c("", "", "pmm"),
-    printFlag = FALSE
-  )
-
-  mice_df <- complete(imp,1)
-
-  fit_mice <- aov(
-    response ~ Treatment + Block,
-    data = mice_df
-  )
-
-  p_mice <-
-    anova(fit_mice)$`Pr(>F)`[1]
-
   ################################################
   # Return p-values
   ################################################
@@ -228,26 +206,25 @@ one_simulation <- function(
  return( p_val <- c(
     complete = p_complete,
     mean_imp = p_mean,
-    mice = p_mice,
     linear_imp = p_linear
   )
  )
   
 }
-one_simulation(treatment_effects, block_effects)
+one_simulation(treatment_effects)
 ```
 
 
 #Replicate the function created in the chunk above
 ```{r}
 set.seed(123)
-n_sims <- 5000
+n_sims <- 1000
 alpha  <- 0.05
  
 # Run all simulations and collect p-values into a matrix (n_sims x 3)
 sim_results <- t(replicate(
   n_sims,
-  one_simulation(treatment_effects,block_effects)
+  one_simulation(treatment_effects)
 ))
  
 # Compute Type I error rate = proportion of p-values < alpha under H0
@@ -255,7 +232,7 @@ type1_error <- colMeans(sim_results < alpha, na.rm = TRUE)
  
 # Summary table
 type1_table <- data.frame(
-  Method        = c("Complete Data", "Mean Imputation", "MICE (Pooled)", "Linear Imputation"),
+  Method        = c("Complete Data", "Mean Imputation", "Linear Imputation"),
   Type_I_Error  = round(type1_error, 4),
   row.names     = NULL
 )
@@ -265,4 +242,24 @@ print(type1_table)
 ```
 
 
+```{r}
+  ################################################
+  # MICE Imputation
+  ################################################
+
+#  m = 5,
+ #   method = c("", "", "pmm"),
+# printFlag = FALSE
+ # )
+
+#  mice_df <- complete(imp,1)
+
+ # fit_mice <- aov(
+  #  response ~ Treatment + Block,
+   # data = mice_df
+#  )
+
+ # p_mice <-
+  #  anova(fit_mice)$`Pr(>F)`[1]
+```
 
