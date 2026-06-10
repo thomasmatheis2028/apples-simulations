@@ -32,13 +32,41 @@ outlier_rcbd1 <- function(blocks, treatments, sigma_e, sigma_b,
     e
 
   model <- aov(response ~ treatment + block, data = data)
+  anova_tbl <- anova(model) |> tidy()
 
-  p_value <- anova(model) |>
-    tidy() |>
+  F_stat <- anova_tbl |>
+    filter(term == "treatment") |>
+    pull(statistic)
+  
+  p_value <- anova_tbl |>
     filter(term == "treatment") |>
     pull(p.value)
 
-  p_value < 0.05
+  reject_F <- p_value < 0.05
+
+  tukey_flag <- TukeyHSD(model, "treatment")$treatment |>
+    as.data.frame() |>
+    pull(`p adj`) |>
+    (\(x) any(x < 0.05))()
+
+  R2 <- summary(lm(response ~ treatment + block, data))$r.squared
+
+  MS_error <- anova_tbl |>
+    filter(term == "Residuals") |>
+    pull(meansq)
+  
+  MS_treatment <- anova_tbl |>
+  filter(term == "treatment") |>
+  pull(meansq)
+
+  tibble(
+    F_stat = F_stat,
+    reject_F = reject_F,
+    R2 = R2,
+    tukey_reject = tukey_flag,
+    MSE = MS_error,
+    MSa = MS_treatment,
+  )
 }
 ```
 
@@ -47,16 +75,26 @@ set.seed(100)
 
 pi_grid <- seq(0, 0.1, by = 0.01)
 
-outlier_pi_curve <- tibble(pi_vals = pi_grid) |>
-  mutate(t1er = map_dbl(pi_vals, function(pi) {
-    map_lgl(1:5000, ~ outlier_rcbd1(7, 8, 3, 3, 100, pi)) |>
-        mean()
-      }))
+outlier_pi_curve <- map_dfr(pi_grid, function(pi) {
+  map_dfr(1:5000, ~ outlier_rcbd1(7, 8, 3, 3, 100, pi)) |>
+    summarise(
+      pi = pi,
+      type1_error = mean(reject_F),
+      mean_F = mean(F_stat),
+      var_F = var(F_stat),
+      mean_MSa = mean(MSa),
+      var_MSa = var(MSa),
+      mean_MSE = mean(MSE),
+      var_MSE = var(MSE),
+      mean_R2 = mean(R2),
+      tukey_fwer = mean(tukey_reject)
+    )
+})
 ```
 
 ```{r}
 ggplot(outlier_pi_curve,
-       aes(x = pi_vals, y = t1er)) +
+       aes(x = pi, y = type1_error)) +
   geom_line() +
   geom_point() +
   labs(
@@ -95,7 +133,7 @@ ggplot(outlier_pi_curve1,
 ```
 
 ```{r}
-outlier_rcbd2 <- function(blocks, treatments, sigma_e, sigma_b, pi) {
+outlier_rcbd2 <- function(blocks, treatments, sigma_e, sigma_b, delta_G, pi) {
 
   data <- expand.grid(
     block = factor(1:blocks),
@@ -111,7 +149,7 @@ outlier_rcbd2 <- function(blocks, treatments, sigma_e, sigma_b, pi) {
   outlier <- runif(n) < pi
 
   e <- rnorm(n, 0, sigma_e)
-  e[outlier] <- rep(10000, sum(outlier))
+  e[outlier] <- rep(delta_G, sum(outlier))
 
   data$response <-
     alpha_t[as.integer(data$treatment)] +
@@ -120,28 +158,67 @@ outlier_rcbd2 <- function(blocks, treatments, sigma_e, sigma_b, pi) {
 
   model <- aov(response ~ treatment + block, data = data)
 
-  p_value <- anova(model) |>
-    tidy() |>
+  anova_tbl <- anova(model) |> tidy()
+
+  F_stat <- anova_tbl |>
+    filter(term == "treatment") |>
+    pull(statistic)
+  
+  p_value <- anova_tbl |>
     filter(term == "treatment") |>
     pull(p.value)
 
-  p_value < 0.05
+  reject_F <- p_value < 0.05
+
+  tukey_flag <- TukeyHSD(model, "treatment")$treatment |>
+    as.data.frame() |>
+    pull(`p adj`) |>
+    (\(x) any(x < 0.05))()
+
+  R2 <- summary(lm(response ~ treatment + block, data))$r.squared
+
+  MS_error <- anova_tbl |>
+    filter(term == "Residuals") |>
+    pull(meansq)
+  
+  MS_treatment <- anova_tbl |>
+  filter(term == "treatment") |>
+  pull(meansq)
+
+  tibble(
+    F_stat = F_stat,
+    reject_F = reject_F,
+    R2 = R2,
+    tukey_reject = tukey_flag,
+    MSE = MS_error,
+    MSa = MS_treatment,
+  )
 }
 ```
 
 ```{r}
 set.seed(100)
 
-outlier_pi_curve2 <- tibble(pi_vals = pi_grid) |>
-  mutate(t1er = map_dbl(pi_vals, function(pi) {
-    map_lgl(1:5000, ~ outlier_rcbd2(7, 8, 3, 3, pi)) |>
-        mean()
-      }))
+outlier_pi_curve2 <- map_dfr(pi_grid, function(pi) {
+  map_dfr(1:5000, ~ outlier_rcbd2(7, 8, 3, 3, 100^2, pi)) |>
+    summarise(
+      pi = pi,
+      type1_error = mean(reject_F),
+      mean_F = mean(F_stat),
+      var_F = var(F_stat),
+      mean_MSa = mean(MSa),
+      var_MSa = var(MSa),
+      mean_MSE = mean(MSE),
+      var_MSE = var(MSE),
+      mean_R2 = mean(R2),
+      tukey_fwer = mean(tukey_reject)
+    )
+})
 ```
 
 ```{r}
 ggplot(outlier_pi_curve2,
-       aes(x = pi_vals, y = t1er)) +
+       aes(x = pi, y = type1_error)) +
   geom_line() +
   geom_point() +
   labs(
@@ -181,28 +258,67 @@ outlier_rcbd3 <- function(blocks, treatments, sigma_e, sigma_b,
 
   model <- aov(response ~ treatment + block, data = data)
 
-  p_value <- anova(model) |>
-    tidy() |>
+  anova_tbl <- anova(model) |> tidy()
+
+  F_stat <- anova_tbl |>
+    filter(term == "treatment") |>
+    pull(statistic)
+  
+  p_value <- anova_tbl |>
     filter(term == "treatment") |>
     pull(p.value)
 
-  p_value < 0.05
+  reject_F <- p_value < 0.05
+
+  tukey_flag <- TukeyHSD(model, "treatment")$treatment |>
+    as.data.frame() |>
+    pull(`p adj`) |>
+    (\(x) any(x < 0.05))()
+
+  R2 <- summary(lm(response ~ treatment + block, data))$r.squared
+
+  MS_error <- anova_tbl |>
+    filter(term == "Residuals") |>
+    pull(meansq)
+  
+  MS_treatment <- anova_tbl |>
+  filter(term == "treatment") |>
+  pull(meansq)
+
+  tibble(
+    F_stat = F_stat,
+    reject_F = reject_F,
+    R2 = R2,
+    tukey_reject = tukey_flag,
+    MSE = MS_error,
+    MSa = MS_treatment,
+  )
 }
 ```
 
 ```{r}
 set.seed(100)
 
-outlier_pi_curve3 <- tibble(pi_vals = pi_grid) |>
-  mutate(t1er = map_dbl(pi_vals, function(pi) {
-    map_lgl(1:5000, ~ outlier_rcbd3(7, 8, 3, 3, 25, pi)) |>
-      mean()
-  }))
+outlier_pi_curve3 <- map_dfr(pi_grid, function(pi) {
+  map_dfr(1:5000, ~ outlier_rcbd3(7, 8, 3, 3, 25, pi)) |>
+    summarise(
+      pi = pi,
+      type1_error = mean(reject_F),
+      mean_F = mean(F_stat),
+      var_F = var(F_stat),
+      mean_MSa = mean(MSa),
+      var_MSa = var(MSa),
+      mean_MSE = mean(MSE),
+      var_MSE = var(MSE),
+      mean_R2 = mean(R2),
+      tukey_fwer = mean(tukey_reject)
+    )
+})
 ```
 
 ```{r}
 ggplot(outlier_pi_curve3,
-       aes(x = pi_vals, y = t1er)) +
+       aes(x = pi, y = type1_error)) +
   geom_line() +
   geom_point() +
   labs(
