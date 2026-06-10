@@ -66,11 +66,16 @@ hrcbd_sim <- function(blocks,
 
   R2 <- summary(lm(response ~ treatment + block, data))$r.squared
 
+  MS_error <- anova_tbl |>
+    filter(term == "Residuals") |>
+    pull(meansq)
+
   tibble(
     F_stat = F_stat,
     reject_F = reject_F,
     R2 = R2,
-    tukey_reject = tukey_flag
+    tukey_reject = tukey_flag,
+    MS_error = MS_error
   )
 }
 ```
@@ -98,7 +103,8 @@ results <- bind_rows(
     mean_F = mean(F_stat),
     mean_reject = mean(reject_F),
     FWER = mean(tukey_reject),
-    mean_R2 = mean(R2)
+    mean_R2 = mean(R2),
+    mean_MSE = mean(MS_error)
   )
 ```
 
@@ -182,11 +188,16 @@ R2_sim_mu2 <- function(blocks,
 
   R2 <- summary(lm(response ~ treatment + block, data))$r.squared
 
+  MS_error <- anova_tbl |>
+    filter(term == "Residuals") |>
+    pull(meansq)
+
   tibble(
     F_stat = F_stat,
     reject_F = reject_F,
     R2 = R2,
-    tukey_reject = tukey_reject
+    tukey_reject = tukey_flag,
+    MS_error = MS_error
   )
 }
 ```
@@ -218,7 +229,8 @@ results1 <- bind_rows(
     mean_F = mean(F_stat),
     mean_reject = mean(reject_F),
     FWER = mean(tukey_reject),
-    mean_R2 = mean(R2)
+    mean_R2 = mean(R2),
+    mean_MSE = mean(MS_error)
   )
 ```
 
@@ -296,11 +308,16 @@ R2_sim_b2 <- function(blocks,
 
   R2 <- summary(lm(response ~ treatment + block, data))$r.squared
 
+  MS_error <- anova_tbl |>
+    filter(term == "Residuals") |>
+    pull(meansq)
+
   tibble(
     F_stat = F_stat,
     reject_F = reject_F,
     R2 = R2,
-    tukey_reject = tukey_reject
+    tukey_reject = tukey_flag,
+    MS_error = MS_error
   )
 }
 ```
@@ -332,7 +349,8 @@ results2 <- bind_rows(
     mean_F = mean(F_stat),
     mean_reject = mean(reject_F),
     FWER = mean(tukey_reject),
-    mean_R2 = mean(R2)
+    mean_R2 = mean(R2),
+    mean_MSE = mean(MS_error)
   )
 ```
 

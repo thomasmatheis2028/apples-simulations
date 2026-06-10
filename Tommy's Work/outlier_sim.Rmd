@@ -7,8 +7,7 @@ output: html_document
 library(tidyverse)
 library(broom)
 
-outlier_rcbd1 <- function(blocks, treatments,
-                         beta_b, sigma_e,
+outlier_rcbd1 <- function(blocks, treatments, sigma_e, sigma_b,
                          sigma_G, pi) {
 
   data <- expand.grid(
@@ -17,6 +16,8 @@ outlier_rcbd1 <- function(blocks, treatments,
   )
 
   alpha_t <- rep(0, treatments)
+  
+  beta_b <- rnorm(blocks, 0, sigma_b)
 
   n <- nrow(data)
 
@@ -33,9 +34,9 @@ outlier_rcbd1 <- function(blocks, treatments,
   model <- aov(response ~ treatment + block, data = data)
 
   p_value <- anova(model) |>
-    broom::tidy() |>
-    dplyr::filter(term == "treatment") |>
-    dplyr::pull(p.value)
+    tidy() |>
+    filter(term == "treatment") |>
+    pull(p.value)
 
   p_value < 0.05
 }
@@ -44,13 +45,11 @@ outlier_rcbd1 <- function(blocks, treatments,
 ```{r}
 set.seed(100)
 
-beta_b <- c(-5, -3, -1, 0, 1, 3, 5)
-
 pi_grid <- seq(0, 0.1, by = 0.01)
 
 outlier_pi_curve <- tibble(pi_vals = pi_grid) |>
   mutate(t1er = map_dbl(pi_vals, function(pi) {
-    map_lgl(1:5000, ~ outlier_rcbd1(7, 8, beta_b, 4, 100, pi)) |>
+    map_lgl(1:5000, ~ outlier_rcbd1(7, 8, 3, 3, 100, pi)) |>
         mean()
       }))
 ```
@@ -76,7 +75,7 @@ pi_grid1 <- seq(0, 1, by = 0.05)
 
 outlier_pi_curve1 <- tibble(pi_vals = pi_grid1) |>
   mutate(t1er = map_dbl(pi_vals, function(pi) {
-    map_lgl(1:5000, ~ outlier_rcbd1(7, 8, beta_b, 4, 100, pi)) |>
+    map_lgl(1:5000, ~ outlier_rcbd1(7, 8, 3, 3, 100, pi)) |>
         mean()
       }))
 ```
@@ -96,8 +95,7 @@ ggplot(outlier_pi_curve1,
 ```
 
 ```{r}
-outlier_rcbd2 <- function(blocks, treatments,
-                         beta_b, sigma_e, pi) {
+outlier_rcbd2 <- function(blocks, treatments, sigma_e, sigma_b, pi) {
 
   data <- expand.grid(
     block = factor(1:blocks),
@@ -105,6 +103,8 @@ outlier_rcbd2 <- function(blocks, treatments,
   )
 
   alpha_t <- rep(0, treatments)
+  
+  beta_b <- rnorm(blocks, 0, sigma_b)
 
   n <- nrow(data)
 
@@ -134,7 +134,7 @@ set.seed(100)
 
 outlier_pi_curve2 <- tibble(pi_vals = pi_grid) |>
   mutate(t1er = map_dbl(pi_vals, function(pi) {
-    map_lgl(1:5000, ~ outlier_rcbd2(7, 8, beta_b, 4, pi)) |>
+    map_lgl(1:5000, ~ outlier_rcbd2(7, 8, 3, 3, pi)) |>
         mean()
       }))
 ```
@@ -154,8 +154,7 @@ ggplot(outlier_pi_curve2,
 ```
 
 ```{r}
-outlier_rcbd3 <- function(blocks, treatments,
-                         beta_b, sigma_e,
+outlier_rcbd3 <- function(blocks, treatments, sigma_e, sigma_b,
                          gamma_G, pi) {
 
   data <- expand.grid(
@@ -164,6 +163,8 @@ outlier_rcbd3 <- function(blocks, treatments,
   )
 
   alpha_t <- rep(0, treatments)
+  
+  beta_b <- rnorm(blocks, 0, sigma_b)
 
   n <- nrow(data)
 
@@ -194,7 +195,7 @@ set.seed(100)
 
 outlier_pi_curve3 <- tibble(pi_vals = pi_grid) |>
   mutate(t1er = map_dbl(pi_vals, function(pi) {
-    map_lgl(1:5000, ~ outlier_rcbd3(7, 8, beta_b, 4, 25, pi)) |>
+    map_lgl(1:5000, ~ outlier_rcbd3(7, 8, 3, 3, 25, pi)) |>
       mean()
   }))
 ```
