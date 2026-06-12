@@ -76,7 +76,7 @@ set.seed(100)
 pi_grid <- seq(0, 0.1, by = 0.01)
 
 outlier_pi_curve <- map_dfr(pi_grid, function(pi) {
-  map_dfr(1:5000, ~ outlier_rcbd1(7, 8, 3, 3, 100, pi)) |>
+  map_dfr(1:10000, ~ outlier_rcbd1(7, 8, 3, 3, 100, pi)) |>
     summarise(
       pi = pi,
       type1_error = mean(reject_F),
@@ -95,32 +95,6 @@ outlier_pi_curve <- map_dfr(pi_grid, function(pi) {
 ```{r}
 ggplot(outlier_pi_curve,
        aes(x = pi, y = type1_error)) +
-  geom_line() +
-  geom_point() +
-  labs(
-    x = expression(pi),
-    y = "Type I Error Rate",
-    title = "Type I Error Rate for Data With Extreme Normal Outliers"
-  ) +
-  ylim(0, 0.1) +
-  theme_bw()
-```
-
-```{r}
-set.seed(100)
-
-pi_grid1 <- seq(0, 1, by = 0.05)
-
-outlier_pi_curve1 <- tibble(pi_vals = pi_grid1) |>
-  mutate(t1er = map_dbl(pi_vals, function(pi) {
-    map_lgl(1:5000, ~ outlier_rcbd1(7, 8, 3, 3, 100, pi)) |>
-        mean()
-      }))
-```
-
-```{r}
-ggplot(outlier_pi_curve1,
-       aes(x = pi_vals, y = t1er)) +
   geom_line() +
   geom_point() +
   labs(
@@ -200,7 +174,7 @@ outlier_rcbd2 <- function(blocks, treatments, sigma_e, sigma_b, delta_G, pi) {
 set.seed(100)
 
 outlier_pi_curve2 <- map_dfr(pi_grid, function(pi) {
-  map_dfr(1:5000, ~ outlier_rcbd2(7, 8, 3, 3, 100^2, pi)) |>
+  map_dfr(1:10000, ~ outlier_rcbd2(7, 8, 3, 3, 100^2, pi)) |>
     summarise(
       pi = pi,
       type1_error = mean(reject_F),
@@ -329,4 +303,6 @@ ggplot(outlier_pi_curve3,
   ylim(0, 0.1) +
   theme_bw()
 ```
+
+
 
