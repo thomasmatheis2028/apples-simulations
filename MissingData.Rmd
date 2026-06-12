@@ -22,8 +22,8 @@ treatments <- paste0("T", 1:n_treatments)
 blocks     <- paste0("Block", 1:n_blocks)
 
 #Treatment and block effects 
-treatment_effects <- c(0,0,0,0,0,0,0)
-block_effects <- c(1,1,1,1,1,1,1)
+treatment_effects <- c(0,0,0,0,0,0,0,0)
+block_effects <- rnorm(n_blocks, mean = 0, sd = 3)
 error <- rnorm(n_treatments * n_blocks, 0, 3)
 
 #Build Dataframe
@@ -72,6 +72,24 @@ head(MCAR_RCBD_df)
 
 ```
 
+#Advanced Mean Imputation
+```{r}
+library(dplyr)
+Adv_MCAR <- MCAR_RCBD_df |>
+  group_by(Treatment) |>
+  mutate(
+  response = if_else(is.na(response), mean(response, na.rm = TRUE), response))|> 
+  ungroup()
+
+Adv_MCAR1 <- MCAR_RCBD_df |>
+  group_by(Block) |>
+  mutate(
+  response = if_else(is.na(response), mean(response, na.rm = TRUE), response))|> 
+  ungroup()
+
+```
+
+
 #Mean Imputation
 ```{r}
 mean_MCAR <- mean(MCAR_RCBD_df$response, na.rm = TRUE)
@@ -94,14 +112,13 @@ completed_all <- complete(imputed, action = "long")
 #Therefore new code must be needed in order to look at it over a certain number for simulations. 
 
 
-#Build function which builds the 3 RCBDs we are looking at
+#Build function which builds the RCBDs we are looking at
 ```{r}
 ##################################################
 # Packages
 ##################################################
-
 library(mice)
-
+library(dplyr)
 ##################################################
 # Simulation Function
 ##################################################
@@ -183,6 +200,38 @@ one_simulation <- function(
     anova(fit_mean)$`Pr(>F)`[1]
   
   ################################################
+  # Conditional Mean Imputation (Treatment)
+  ################################################
+  CMIT_df <- missing_df
+  
+  CMIT_df <- CMIT_df |>
+  group_by(Treatment) |>
+  mutate(
+  response = if_else(is.na(response), mean(response, na.rm = TRUE), response))|> 
+  ungroup()
+  
+  fit_CMIT <- aov( response ~ Treatment + Block,
+    data = CMIT_df)
+  
+  p_CMIT <- anova(fit_CMIT)$`Pr(>F)`[1]
+  
+  ################################################
+  # Conditional Mean Imputation (Block)
+  ################################################
+  CMIB_df <- missing_df
+  
+  CMIB_df <- CMIB_df |>
+  group_by(Block) |>
+  mutate(
+  response = if_else(is.na(response), mean(response, na.rm = TRUE), response))|> 
+  ungroup()
+  
+  fit_CMIB <- aov( response ~ Treatment + Block,
+    data = CMIB_df)
+  
+  p_CMIB <- anova(fit_CMIB)$`Pr(>F)`[1]
+  
+  ################################################
   # LINEAR REGRESSION IMPUTATION
   ################################################
   
@@ -198,7 +247,7 @@ one_simulation <- function(
     data = linear_df)
  
  p_linear <- anova(fit_linear)$`Pr(>F)`[1]
-  
+ 
   ################################################
   # Return p-values
   ################################################
@@ -206,7 +255,9 @@ one_simulation <- function(
  return( p_val <- c(
     complete = p_complete,
     mean_imp = p_mean,
-    linear_imp = p_linear
+    linear_imp = p_linear,
+    CMIT = p_CMIT,
+    CMIB = p_CMIB
   )
  )
   
@@ -218,7 +269,7 @@ one_simulation(treatment_effects)
 #Replicate the function created in the chunk above
 ```{r}
 set.seed(123)
-n_sims <- 1000
+n_sims <- 5000
 alpha  <- 0.05
  
 # Run all simulations and collect p-values into a matrix (n_sims x 3)
@@ -232,7 +283,7 @@ type1_error <- colMeans(sim_results < alpha, na.rm = TRUE)
  
 # Summary table
 type1_table <- data.frame(
-  Method        = c("Complete Data", "Mean Imputation", "Linear Imputation"),
+  Method        = c("Complete Data", "Mean Imputation", "Linear Imputation", "CMIT", "CMIB"),
   Type_I_Error  = round(type1_error, 4),
   row.names     = NULL
 )
