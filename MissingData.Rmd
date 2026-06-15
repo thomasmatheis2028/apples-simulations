@@ -143,8 +143,8 @@ one_simulation <- function(
 
 
   initial_df$response <-
-    treatment_effects[as.numeric(initial_df$Treatment)] +
-    block_effects[as.numeric(initial_df$Block)] +
+    treatment_effects[as.factor(initial_df$Treatment)] +
+    block_effects[as.factor(initial_df$Block)] +
     rnorm(nrow(initial_df),0,sigma)
 
   ################################################
@@ -176,6 +176,8 @@ one_simulation <- function(
   )
 
   missing_df$response[missing_rows] <- NA
+  
+  head(missing_df)
 
 
   ################################################
@@ -260,9 +262,10 @@ one_simulation <- function(
     CMIB = p_CMIB
   )
  )
-  
+print(head(missing_df))
 }
 one_simulation(treatment_effects)
+
 ```
 
 
