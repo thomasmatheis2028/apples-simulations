@@ -174,7 +174,7 @@ outlier_rcbd2 <- function(blocks, treatments, sigma_e, sigma_b, delta_G, pi) {
 set.seed(100)
 
 outlier_pi_curve2 <- map_dfr(pi_grid, function(pi) {
-  map_dfr(1:10000, ~ outlier_rcbd2(7, 8, 3, 3, 100^2, pi)) |>
+  map_dfr(1:10000, ~ outlier_rcbd2(7, 8, 3, 3, 100, pi)) |>
     summarise(
       pi = pi,
       type1_error = mean(reject_F),
@@ -304,5 +304,96 @@ ggplot(outlier_pi_curve3,
   theme_bw()
 ```
 
+```{r}
+normal_hist <- function(blocks, treatments, sigma_e, sigma_b,
+                         sigma_G, pi) {
 
+  data <- expand.grid(
+    block = factor(1:blocks),
+    treatment = factor(1:treatments)
+  )
+
+  alpha_t <- rep(0, treatments)
+  
+  beta_b <- rnorm(blocks, 0, sigma_b)
+
+  n <- nrow(data)
+
+  outlier <- runif(n) < pi
+
+  e <- rnorm(n, 0, sigma_e)
+  e[outlier] <- rnorm(sum(outlier), 0, sigma_G)
+
+  data$response <-
+    alpha_t[as.integer(data$treatment)] +
+    beta_b[as.integer(data$block)] +
+    e
+}
+
+normal_hist_data <- normal_hist(20,20,3,3,100,0.1)
+
+hist(normal_hist_data, breaks = 50)
+```
+
+```{r}
+constant_hist <- function(blocks, treatments, sigma_e, sigma_b, delta_G, pi) {
+
+  data <- expand.grid(
+    block = factor(1:blocks),
+    treatment = factor(1:treatments)
+  )
+
+  alpha_t <- rep(0, treatments)
+  
+  beta_b <- rnorm(blocks, 0, sigma_b)
+
+  n <- nrow(data)
+
+  outlier <- runif(n) < pi
+
+  e <- rnorm(n, 0, sigma_e)
+  e[outlier] <- rep(delta_G, sum(outlier))
+
+  data$response <-
+    alpha_t[as.integer(data$treatment)] +
+    beta_b[as.integer(data$block)] +
+    e
+}
+
+constant_hist_data <- constant_hist(20,20,3,3,100,0.1)
+
+hist(constant_hist_data, breaks = 50)
+```
+
+```{r}
+cauchy_hist <- function(blocks, treatments, sigma_e, sigma_b,
+                         gamma_G, pi) {
+
+  data <- expand.grid(
+    block = factor(1:blocks),
+    treatment = factor(1:treatments)
+  )
+
+  alpha_t <- rep(0, treatments)
+  
+  beta_b <- rnorm(blocks, 0, sigma_b)
+
+  n <- nrow(data)
+
+  outlier <- runif(n) < pi
+
+  e <- rnorm(n, 0, sigma_e)
+
+  e[outlier] <- rcauchy(sum(outlier), location = 0, scale = gamma_G)
+
+  data$response <-
+    alpha_t[as.integer(data$treatment)] +
+    beta_b[as.integer(data$block)] +
+    e
+}
+
+cauchy_hist_data <- cauchy_hist(20,20,3,3,25,0.1)
+
+hist(cauchy_hist_data, breaks = 50)
+```
 
