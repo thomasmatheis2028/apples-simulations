@@ -436,3 +436,68 @@ write_csv(results1, "hetero_mean_data.csv")
 write_csv(results2, "hetero_beta_data.csv")
 ```
 
+```{r}
+sim_hist <- function(blocks,
+                   treatments,
+                   mu,
+                   sigma_b,
+                   R2_target) {
+
+  data <- expand.grid(
+    block = factor(1:blocks),
+    treatment = factor(1:treatments)
+  )
+
+  alpha_t <- rep(0, treatments)
+  
+  beta_b <- rnorm(blocks, 0, sigma_b)
+
+  S <- treatments * sum((beta_b - mean(beta_b))^2)
+
+  Vbar <- 1
+
+  A1 <- treatments + blocks - 2
+  B1 <- treatments * blocks - 1
+
+  sigma <- sqrt(S * (1 - R2_target) /(Vbar * (R2_target * B1 - A1)))
+
+  mu_tb <- mu + alpha_t[data$treatment] + beta_b[data$block]
+
+  normal <- mu_tb + rnorm(nrow(data), 0, sigma)
+
+  lognormal <- rlnorm(
+    nrow(data),
+    meanlog = 3,
+    sdlog = 0.5
+  )
+
+  exponential <- rexp(
+    nrow(data),
+    rate = 1 / 20)
+
+  log_dist <- lognormal |> log()
+  
+  tibble(
+    normal = normal,
+    lognormal = lognormal,
+    log = log_dist,
+    exp = exponential
+    )
+}
+```
+
+```{r}
+normal_data <- sim_hist(20, 20, 20, 10, 0.5)
+
+normal_hist <- normal_data$normal
+lognormal_hist <- normal_data$lognormal
+log_hist <- normal_data$log
+exp_hist <- normal_data$exp
+
+hist(normal_hist, breaks = 50)
+hist(lognormal_hist, breaks = 50)
+hist(log_hist, breaks = 50)
+hist(exp_hist, breaks = 50)
+```
+
+
