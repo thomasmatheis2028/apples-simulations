@@ -107,6 +107,41 @@ ggplot(outlier_pi_curve,
 ```
 
 ```{r}
+set.seed(100)
+
+outlier_pi_curve1 <- map_dfr(pi_grid, function(pi) {
+  map_dfr(1:10000, ~ outlier_rcbd1(7, 8, 3, 3, 10, pi)) |>
+    summarise(
+      pi = pi,
+      type1_error = mean(reject_F),
+      mean_F = mean(F_stat),
+      var_F = var(F_stat),
+      mean_MSa = mean(MSa),
+      var_MSa = var(MSa),
+      mean_MSE = mean(MSE),
+      var_MSE = var(MSE),
+      mean_R2 = mean(R2),
+      tukey_fwer = mean(tukey_reject)
+    )
+})
+```
+
+```{r}
+ggplot(outlier_pi_curve1,
+       aes(x = pi, y = type1_error)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    x = expression(pi),
+    y = "Type I Error Rate",
+    title = "Type I Error Rate for Data With Mild Normal Outliers"
+  ) +
+  ylim(0, 0.1) +
+  theme_bw()
+```
+
+
+```{r}
 outlier_rcbd2 <- function(blocks, treatments, sigma_e, sigma_b, delta_G, pi) {
 
   data <- expand.grid(
@@ -330,7 +365,7 @@ normal_hist <- function(blocks, treatments, sigma_e, sigma_b,
     e
 }
 
-normal_hist_data <- normal_hist(20,20,3,3,100,0.1)
+normal_hist_data <- normal_hist(20,20,3,3,20,0.1)
 
 hist(normal_hist_data, breaks = 50)
 ```
