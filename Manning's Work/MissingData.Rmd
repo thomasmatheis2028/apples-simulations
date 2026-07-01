@@ -1,4 +1,4 @@
----
+ ---
 title: "Missing Data Simulation Study"
 output: html_document
 date: "2026-06-09"
@@ -293,6 +293,13 @@ type1_table <- data.frame(
  
 cat("\n==== Type I Error Rate Comparison (alpha =", alpha, ", n_sims =", n_sims, ") ====\n")
 print(type1_table)
+```
+
+
+```{r}
+#Simulation Comparing CMIB and Mean Imputation
+
+
 ```
 
 
