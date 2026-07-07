@@ -4,9 +4,12 @@ output: html_document
 ---
 
 ```{r}
+# Load packages used for data manipulation, modeling output tidying, and plotting.
 library(tidyverse)
 library(broom)
 
+# Simulate a randomized complete block design with constant within-cell variance.
+# The treatment effects are set to zero so rejection rates estimate Type I error.
 R2_sim_het <- function(blocks,
                    treatments,
                    mu,
@@ -14,38 +17,53 @@ R2_sim_het <- function(blocks,
                    R2_target,
                    response_type = "normal") {
 
+  # Create one observation for every treatment-by-block combination.
   data <- expand.grid(
     block = factor(1:blocks),
     treatment = factor(1:treatments)
   )
 
+  # Set all treatment effects to zero under the null hypothesis.
   alpha_t <- rep(0, treatments)
   
+  # Generate random block effects with user-specified variability.
   beta_b <- rnorm(blocks, 0, sigma_b)
 
+  # Compute the block-effect sum of squares contribution used to calibrate R^2.
   S <- treatments * sum((beta_b - mean(beta_b))^2)
 
+  # Use a constant variance function for the homoscedastic simulation setting.
   Vbar <- 1
 
+  # Store degrees-of-freedom-related constants used in the R^2 calibration.
   A1 <- treatments + blocks - 2
   B1 <- treatments * blocks - 1
 
+  # Choose the residual scale so the expected linear-model R^2 targets R2_target.
   sigma <- sqrt(S * (1 - R2_target) /(Vbar * (R2_target * B1 - A1)))
 
+  # Compute the treatment-by-block mean for each simulated observation.
   mu_tb <- mu + alpha_t[data$treatment] + beta_b[data$block]
 
+  # Assign the cell-specific variance multiplier.
   V_tb <- 1
 
+  # Generate normal random errors using the calibrated residual scale.
   e <- rnorm(nrow(data), mean = 0, sd = sigma * sqrt(V_tb))
 
+  # Construct the normal response.
   y1 <- mu_tb + e
 
+  # Compute the cell-specific variance on the normal scale.
   Var_tb <- sigma^2 * V_tb
 
+  # Compute transformation constants so the lognormal response preserves target moments.
   a_tb <- sqrt(log(1 + Var_tb / mu_tb^2)) / sqrt(Var_tb)
 
+  # Compute the location constant for the moment-matched lognormal transformation.
   b_tb <- log(mu_tb) - a_tb * mu_tb - (a_tb^2 * Var_tb) / 2
 
+  # Select the requested response scale for the same simulated data.
   if (response_type == "normal") {
   response <- y1
   } else if (response_type == "lognormal") {
@@ -56,34 +74,44 @@ R2_sim_het <- function(blocks,
   response <- exp(y1)
   }
 
+  # Attach the simulated response to the design data frame.
   data$response <- response
 
+  # Fit the additive randomized complete block ANOVA model.
   model <- aov(response ~ treatment + block, data)
   anova_tbl <- anova(model) |> tidy()
 
+  # Extract the treatment row from the ANOVA table.
   treatment_row <- anova_tbl |>
     filter(term == "treatment")
 
+  # Save the treatment F statistic and corresponding p-value.
   F_stat <- treatment_row$statistic
   p_value <- treatment_row$p.value
 
+  # Record whether the treatment test rejects at alpha = 0.05.
   reject_F <- p_value < 0.05
 
+  # Record whether any Tukey-adjusted pairwise treatment comparison rejects.
   tukey_reject <- TukeyHSD(model, "treatment")$treatment |>
     as.data.frame() |>
     pull(`p adj`) |>
     (\(x) any(x < 0.05))()
 
+  # Compute the observed model R^2 for this simulation replicate.
   R2 <- summary(lm(response ~ treatment + block, data))$r.squared
 
+  # Extract the residual mean square.
   MS_error <- anova_tbl |>
     filter(term == "Residuals") |>
     pull(meansq)
   
+  # Extract the treatment mean square.
   MS_treatment <- anova_tbl |>
   filter(term == "treatment") |>
   pull(meansq)
 
+  # Return the replicate-level operating characteristics and ANOVA components.
   tibble(
     F_stat = F_stat,
     reject_F = reject_F,
@@ -96,18 +124,25 @@ R2_sim_het <- function(blocks,
 ```
 
 ```{r}
+# Set the random seed so the simulation study is reproducible.
 set.seed(100)
 
+# Specify the target proportion of variation explained by treatment and block terms.
 R2_target <- 0.5
 
+# Run 10,000 homoscedastic simulations and analyze the untransformed response.
 results_normal <- map_dfr(1:10000, ~ R2_sim_het(7, 8, 20, 3, R2_target, "normal"))
 
+# Run 10,000 homoscedastic simulations and analyze the moment-matched lognormal response.
 results_lognormal <- map_dfr(1:10000, ~ R2_sim_het(7, 8, 20, 3, R2_target, "lognormal"))
 
+# Run 10,000 homoscedastic simulations and analyze the log-scale transformed response.
 results_log <- map_dfr(1:10000, ~ R2_sim_het(7, 8, 20, 3, R2_target, "log"))
 
+# Run 10,000 homoscedastic simulations and analyze the exponentiated response.
 results_exp <- map_dfr(1:10000, ~ R2_sim_het(7, 8, 20, 3, R2_target, "exp"))
 
+# Combine simulation outputs and summarize rejection rates and ANOVA diagnostics by response scale.
 results <- bind_rows(
   normal = results_normal,
   lognormal = results_lognormal,
@@ -129,8 +164,8 @@ results <- bind_rows(
   )
 ```
 
-
 ```{r}
+# Plot the Type I error rate for each response transformation.
 ggplot(results, aes(x = dataset, y = type1_error)) +
   geom_bar(stat = "identity", fill = "red3") +
   geom_hline(yintercept = 0.05, linetype = "dashed") +
@@ -143,8 +178,9 @@ ggplot(results, aes(x = dataset, y = type1_error)) +
   theme_bw()
 ```
 
-
 ```{r}
+# Simulate a randomized complete block design with variance proportional to the squared mean.
+# Treatment effects remain zero so rejection rates estimate null Type I error.
 R2_sim_mu2 <- function(blocks,
                    treatments,
                    mu,
@@ -152,46 +188,63 @@ R2_sim_mu2 <- function(blocks,
                    R2_target,
                    response_type = "normal") {
 
+  # Create one observation for every treatment-by-block combination.
   data <- expand.grid(
     block = factor(1:blocks),
     treatment = factor(1:treatments)
   )
 
+  # Set all treatment effects to zero under the null hypothesis.
   alpha_t <- rep(0, treatments)
   
+  # Generate random block effects with user-specified variability.
   beta_b <- rnorm(blocks, 0, sigma_b)
 
+  # Compute the block-effect sum of squares contribution used to calibrate R^2.
   S <- treatments * sum((beta_b - mean(beta_b))^2)
 
+  # Build the matrix of treatment-by-block means used by the variance function.
   mean_matrix <- outer(
     alpha_t,
     beta_b,
     function(alpha, beta) mu + alpha + beta
   )
 
+  # Set the variance multiplier proportional to the squared mean.
   variance_matrix <- mean_matrix^2
 
+  # Average the variance multipliers for the R^2 calibration.
   Vbar <- mean(variance_matrix)
 
+  # Store degrees-of-freedom-related constants used in the R^2 calibration.
   A1 <- treatments + blocks - 2
   B1 <- treatments * blocks - 1
 
+  # Choose the residual scale so the expected linear-model R^2 targets R2_target.
   sigma <- sqrt(S * (1 - R2_target) /(Vbar * (R2_target * B1 - A1)))
 
+  # Compute the treatment-by-block mean for each simulated observation.
   mu_tb <- mu + alpha_t[data$treatment] + beta_b[data$block]
 
+  # Assign the observation-specific variance multiplier.
   V_tb <- mu_tb^2
 
+  # Generate normal random errors using the calibrated heteroscedastic scale.
   e <- rnorm(nrow(data), mean = 0, sd = sigma * sqrt(V_tb))
 
+  # Construct the normal response.
   y1 <- mu_tb + e
 
+  # Compute the cell-specific variance on the normal scale.
   Var_tb <- sigma^2 * V_tb
 
+  # Compute transformation constants so the lognormal response preserves target moments.
   a_tb <- sqrt(log(1 + Var_tb / mu_tb^2)) / sqrt(Var_tb)
 
+  # Compute the location constant for the moment-matched lognormal transformation.
   b_tb <- log(mu_tb) - a_tb * mu_tb - (a_tb^2 * Var_tb) / 2
 
+  # Select the requested response scale for the same simulated data.
   if (response_type == "normal") {
   response <- y1
   } else if (response_type == "lognormal") {
@@ -202,34 +255,44 @@ R2_sim_mu2 <- function(blocks,
   response <- exp(y1)
   }
 
+  # Attach the simulated response to the design data frame.
   data$response <- response
 
+  # Fit the additive randomized complete block ANOVA model.
   model <- aov(response ~ treatment + block, data)
   anova_tbl <- anova(model) |> tidy()
 
+  # Extract the treatment row from the ANOVA table.
   treatment_row <- anova_tbl |>
     filter(term == "treatment")
 
+  # Save the treatment F statistic and corresponding p-value.
   F_stat <- treatment_row$statistic
   p_value <- treatment_row$p.value
 
+  # Record whether the treatment test rejects at alpha = 0.05.
   reject_F <- p_value < 0.05
 
+  # Record whether any Tukey-adjusted pairwise treatment comparison rejects.
   tukey_reject <- TukeyHSD(model, "treatment")$treatment |>
     as.data.frame() |>
     pull(`p adj`) |>
     (\(x) any(x < 0.05))()
 
+  # Compute the observed model R^2 for this simulation replicate.
   R2 <- summary(lm(response ~ treatment + block, data))$r.squared
 
+  # Extract the residual mean square.
   MS_error <- anova_tbl |>
     filter(term == "Residuals") |>
     pull(meansq)
   
+  # Extract the treatment mean square.
   MS_treatment <- anova_tbl |>
   filter(term == "treatment") |>
   pull(meansq)
 
+  # Return the replicate-level operating characteristics and ANOVA components.
   tibble(
     F_stat = F_stat,
     reject_F = reject_F,
@@ -242,16 +305,22 @@ R2_sim_mu2 <- function(blocks,
 ```
 
 ```{r}
+# Reset the random seed so this scenario is reproducible.
 set.seed(100)
 
+# Run 10,000 simulations with variance proportional to the squared mean.
 results_normal1 <- map_dfr(1:10000, ~ R2_sim_mu2(7, 8, 20, 3, R2_target, "normal"))
 
+# Analyze the lognormal response for the same variance structure.
 results_lognormal1 <- map_dfr(1:10000, ~ R2_sim_mu2(7, 8, 20, 3, R2_target, "lognormal"))
 
+# Analyze the log-scale response for the same variance structure.
 results_log1 <- map_dfr(1:10000, ~ R2_sim_mu2(7, 8, 20, 3, R2_target, "log"))
 
+# Analyze the exponentiated response for the same variance structure.
 results_exp1 <- map_dfr(1:10000, ~ R2_sim_mu2(7, 8, 20, 3, R2_target, "exp"))
 
+# Combine simulation outputs and summarize rejection rates and ANOVA diagnostics by response scale.
 results1 <- bind_rows(
   normal = results_normal1,
   lognormal = results_lognormal1,
@@ -274,6 +343,7 @@ results1 <- bind_rows(
 ```
 
 ```{r}
+# Plot the Type I error rate when variance is proportional to the squared mean.
 ggplot(results1, aes(x = dataset, y = type1_error)) +
   geom_bar(stat = "identity", fill = "red3") +
   geom_hline(yintercept = 0.05, linetype = "dashed") +
@@ -287,8 +357,9 @@ ggplot(results1, aes(x = dataset, y = type1_error)) +
   theme_bw()
 ```
 
-
 ```{r}
+# Simulate a randomized complete block design with variance proportional to squared block effects.
+# Treatment effects remain zero so rejection rates estimate null Type I error.
 R2_sim_b2 <- function(blocks,
                    treatments,
                    mu,
@@ -296,44 +367,60 @@ R2_sim_b2 <- function(blocks,
                    R2_target,
                    response_type = "normal") {
 
+  # Create one observation for every treatment-by-block combination.
   data <- expand.grid(
     block = factor(1:blocks),
     treatment = factor(1:treatments)
   )
 
+  # Set all treatment effects to zero under the null hypothesis.
   alpha_t <- rep(0, treatments)
   
+  # Generate random block effects with user-specified variability.
   beta_b <- rnorm(blocks, 0, sigma_b)
 
+  # Compute the block-effect sum of squares contribution used to calibrate R^2.
   S <- treatments * sum((beta_b - mean(beta_b))^2)
 
+  # Build the matrix of variance multipliers based on squared block effects.
   variance_matrix <- outer(
     alpha_t,
     beta_b,
     function(alpha, beta) beta^2
   )
 
+  # Average the variance multipliers for the R^2 calibration.
   Vbar <- mean(variance_matrix)
 
+  # Store degrees-of-freedom-related constants used in the R^2 calibration.
   A1 <- treatments + blocks - 2
   B1 <- treatments * blocks - 1
 
+  # Choose the residual scale so the expected linear-model R^2 targets R2_target.
   sigma <- sqrt(S * (1 - R2_target) /(Vbar * (R2_target * B1 - A1)))
 
+  # Compute the treatment-by-block mean for each simulated observation.
   mu_tb <- mu + alpha_t[data$treatment] + beta_b[data$block]
 
+  # Assign the observation-specific variance multiplier from the block effect.
   V_tb <- beta_b[data$block]^2      # variance proportional to beta^2
 
+  # Generate normal random errors using the calibrated heteroscedastic scale.
   e <- rnorm(nrow(data), mean = 0, sd = sigma * sqrt(V_tb))
 
+  # Construct the normal response.
   y1 <- mu_tb + e
 
+  # Compute the cell-specific variance on the normal scale.
   Var_tb <- sigma^2 * V_tb
 
+  # Compute transformation constants so the lognormal response preserves target moments.
   a_tb <- sqrt(log(1 + Var_tb / mu_tb^2)) / sqrt(Var_tb)
 
+  # Compute the location constant for the moment-matched lognormal transformation.
   b_tb <- log(mu_tb) - a_tb * mu_tb - (a_tb^2 * Var_tb) / 2
 
+  # Select the requested response scale for the same simulated data.
   if (response_type == "normal") {
   response <- y1
   } else if (response_type == "lognormal") {
@@ -344,34 +431,44 @@ R2_sim_b2 <- function(blocks,
   response <- exp(y1)
   }
 
+  # Attach the simulated response to the design data frame.
   data$response <- response
 
+  # Fit the additive randomized complete block ANOVA model.
   model <- aov(response ~ treatment + block, data)
   anova_tbl <- anova(model) |> tidy()
 
+  # Extract the treatment row from the ANOVA table.
   treatment_row <- anova_tbl |>
     filter(term == "treatment")
 
+  # Save the treatment F statistic and corresponding p-value.
   F_stat <- treatment_row$statistic
   p_value <- treatment_row$p.value
 
+  # Record whether the treatment test rejects at alpha = 0.05.
   reject_F <- p_value < 0.05
 
+  # Record whether any Tukey-adjusted pairwise treatment comparison rejects.
   tukey_reject <- TukeyHSD(model, "treatment")$treatment |>
     as.data.frame() |>
     pull(`p adj`) |>
     (\(x) any(x < 0.05))()
 
+  # Compute the observed model R^2 for this simulation replicate.
   R2 <- summary(lm(response ~ treatment + block, data))$r.squared
 
+  # Extract the residual mean square.
   MS_error <- anova_tbl |>
     filter(term == "Residuals") |>
     pull(meansq)
 
+  # Extract the treatment mean square.
   MS_treatment <- anova_tbl |>
   filter(term == "treatment") |>
   pull(meansq)
 
+  # Return the replicate-level operating characteristics and ANOVA components.
   tibble(
     F_stat = F_stat,
     reject_F = reject_F,
@@ -384,16 +481,22 @@ R2_sim_b2 <- function(blocks,
 ```
 
 ```{r}
+# Reset the random seed so this scenario is reproducible.
 set.seed(100)
 
+# Run 10,000 simulations with variance proportional to squared block effects.
 results_normal2 <- map_dfr(1:10000, ~ R2_sim_b2(7, 8, 20, 3, R2_target, "normal"))
 
+# Analyze the lognormal response for the block-variance setting.
 results_lognormal2 <- map_dfr(1:10000, ~ R2_sim_b2(7, 8, 20, 3, R2_target, "lognormal"))
 
+# Analyze the log-scale response for the block-variance setting.
 results_log2 <- map_dfr(1:10000, ~ R2_sim_b2(7, 8, 20, 3, R2_target, "log"))
 
+# Analyze the exponentiated response for the block-variance setting.
 results_exp2 <- map_dfr(1:10000, ~ R2_sim_b2(7, 8, 20, 3, R2_target, "exp"))
 
+# Combine simulation outputs and summarize rejection rates and ANOVA diagnostics by response scale.
 results2 <- bind_rows(
   normal = results_normal2,
   lognormal = results_lognormal2,
@@ -416,6 +519,7 @@ results2 <- bind_rows(
 ```
 
 ```{r}
+# Plot the Type I error rate when variance is proportional to block effects.
 ggplot(results2, aes(x = dataset, y = type1_error)) +
   geom_bar(stat = "identity", fill = "red3") +
   geom_hline(yintercept = 0.05, linetype = "dashed") +
@@ -429,54 +533,68 @@ ggplot(results2, aes(x = dataset, y = type1_error)) +
   theme_bw()
 ```
 
-
-```{r}
+```{r, eval=FALSE}
+# Export the summarized simulation results for manuscript tables or external plotting.
 write_csv(results, "homo_data.csv")
 write_csv(results1, "hetero_mean_data.csv")
 write_csv(results2, "hetero_beta_data.csv")
 ```
 
 ```{r}
+# Simulate representative response distributions for exploratory histogram displays.
 sim_hist <- function(blocks,
                    treatments,
                    mu,
                    sigma_b,
                    R2_target) {
 
+  # Create one observation for every treatment-by-block combination.
   data <- expand.grid(
     block = factor(1:blocks),
     treatment = factor(1:treatments)
   )
 
+  # Set all treatment effects to zero for the illustrative distribution simulation.
   alpha_t <- rep(0, treatments)
   
+  # Generate random block effects.
   beta_b <- rnorm(blocks, 0, sigma_b)
 
+  # Compute the block-effect sum of squares contribution used to calibrate R^2.
   S <- treatments * sum((beta_b - mean(beta_b))^2)
 
+  # Use a constant variance multiplier for the illustrative normal response.
   Vbar <- 1
 
+  # Store degrees-of-freedom-related constants used in the R^2 calibration.
   A1 <- treatments + blocks - 2
   B1 <- treatments * blocks - 1
 
+  # Choose the residual scale so the expected linear-model R^2 targets R2_target.
   sigma <- sqrt(S * (1 - R2_target) /(Vbar * (R2_target * B1 - A1)))
 
+  # Compute the treatment-by-block mean for each simulated observation.
   mu_tb <- mu + alpha_t[data$treatment] + beta_b[data$block]
 
+  # Generate a normally distributed response centered at the treatment-by-block means.
   normal <- mu_tb + rnorm(nrow(data), 0, sigma)
 
+  # Generate a lognormal response for shape comparison.
   lognormal <- rlnorm(
     nrow(data),
     meanlog = 3,
     sdlog = 0.5
   )
 
+  # Generate an exponential response with mean 20 for shape comparison.
   exponential <- rexp(
     nrow(data),
     rate = 1 / 20)
 
+  # Log-transform the lognormal response to visualize the induced log-scale distribution.
   log_dist <- lognormal |> log()
   
+  # Return all illustrative response distributions in a single data frame.
   tibble(
     normal = normal,
     lognormal = lognormal,
@@ -487,13 +605,16 @@ sim_hist <- function(blocks,
 ```
 
 ```{r}
+# Generate data used for the illustrative histograms.
 normal_data <- sim_hist(20, 20, 20, 10, 0.5)
 
+# Store each simulated distribution as a separate vector for plotting.
 normal_hist <- normal_data$normal
 lognormal_hist <- normal_data$lognormal
 log_hist <- normal_data$log
 exp_hist <- normal_data$exp
 
+# Plot histograms for the four illustrative response distributions.
 hist(normal_hist, breaks = 50)
 hist(lognormal_hist, breaks = 50)
 hist(log_hist, breaks = 50)
