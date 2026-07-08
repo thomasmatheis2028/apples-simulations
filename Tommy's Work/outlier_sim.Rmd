@@ -7,6 +7,9 @@ output: html_document
 library(tidyverse)
 library(broom)
 
+# OUTLIER SIMULATION MODELS
+
+### 1. Mixture Model: Contaminated Normal Outliers
 outlier_rcbd1 <- function(blocks, treatments, sigma_e, sigma_b,
                          sigma_G, pi) {
 
@@ -15,14 +18,16 @@ outlier_rcbd1 <- function(blocks, treatments, sigma_e, sigma_b,
     treatment = factor(1:treatments)
   )
 
+  # Simulation setup under the Null Hypothesis (no true treatment effects)
   alpha_t <- rep(0, treatments)
-  
   beta_b <- rnorm(blocks, 0, sigma_b)
 
   n <- nrow(data)
 
+  # Generate binary contamination indicator using a uniform distribution
   outlier <- runif(n) < pi
 
+  # Normal observations drawn from N(0, sigma_e^2); outliers drawn from N(0, sigma_G^2)
   e <- rnorm(n, 0, sigma_e)
   e[outlier] <- rnorm(sum(outlier), 0, sigma_G)
 
@@ -31,6 +36,7 @@ outlier_rcbd1 <- function(blocks, treatments, sigma_e, sigma_b,
     beta_b[as.integer(data$block)] +
     e
 
+  # Additive Two-Way ANOVA Evaluation
   model <- aov(response ~ treatment + block, data = data)
   anova_tbl <- anova(model) |> tidy()
 
@@ -42,8 +48,10 @@ outlier_rcbd1 <- function(blocks, treatments, sigma_e, sigma_b,
     filter(term == "treatment") |>
     pull(p.value)
 
+  # Monitor operational Type I Error rate limits (alpha = 0.05)
   reject_F <- p_value < 0.05
 
+  # Track Family-Wise Error Rate (FWER) using adjusted Tukey's p-values
   tukey_flag <- TukeyHSD(model, "treatment")$treatment |>
     as.data.frame() |>
     pull(`p adj`) |>
@@ -51,13 +59,14 @@ outlier_rcbd1 <- function(blocks, treatments, sigma_e, sigma_b,
 
   R2 <- summary(lm(response ~ treatment + block, data))$r.squared
 
+  # Extract structural mean squares to determine diagnostic variance inflation
   MS_error <- anova_tbl |>
     filter(term == "Residuals") |>
     pull(meansq)
   
   MS_treatment <- anova_tbl |>
-  filter(term == "treatment") |>
-  pull(meansq)
+    filter(term == "treatment") |>
+    pull(meansq)
 
   tibble(
     F_stat = F_stat,
@@ -71,10 +80,14 @@ outlier_rcbd1 <- function(blocks, treatments, sigma_e, sigma_b,
 ```
 
 ```{r}
+# EXPERIMENT 1: CONTAMINATED NORMAL OUTLIERS (EXTREME VS MILD SCALE)
+
 set.seed(100)
 
+# Establish vector grid for contamination proportion bounds (0% to 10%)
 pi_grid <- seq(0, 0.1, by = 0.01)
 
+# Scenario A: Contamination using extreme normal outliers (sigma_G = 100)
 outlier_pi_curve <- map_dfr(pi_grid, function(pi) {
   map_dfr(1:10000, ~ outlier_rcbd1(7, 8, 3, 3, 100, pi)) |>
     summarise(
@@ -93,6 +106,7 @@ outlier_pi_curve <- map_dfr(pi_grid, function(pi) {
 ```
 
 ```{r}
+# Display Type I Error robustness behavior across extreme variance scales
 ggplot(outlier_pi_curve,
        aes(x = pi, y = type1_error)) +
   geom_line() +
@@ -106,42 +120,9 @@ ggplot(outlier_pi_curve,
   theme_bw()
 ```
 
-```{r}
-set.seed(100)
-
-outlier_pi_curve1 <- map_dfr(pi_grid, function(pi) {
-  map_dfr(1:10000, ~ outlier_rcbd1(7, 8, 3, 3, 10, pi)) |>
-    summarise(
-      pi = pi,
-      type1_error = mean(reject_F),
-      mean_F = mean(F_stat),
-      var_F = var(F_stat),
-      mean_MSa = mean(MSa),
-      var_MSa = var(MSa),
-      mean_MSE = mean(MSE),
-      var_MSE = var(MSE),
-      mean_R2 = mean(R2),
-      tukey_fwer = mean(tukey_reject)
-    )
-})
-```
 
 ```{r}
-ggplot(outlier_pi_curve1,
-       aes(x = pi, y = type1_error)) +
-  geom_line() +
-  geom_point() +
-  labs(
-    x = expression(pi),
-    y = "Type I Error Rate",
-    title = "Type I Error Rate for Data With Mild Normal Outliers"
-  ) +
-  ylim(0, 0.1) +
-  theme_bw()
-```
-
-
-```{r}
+### 2. Mixture Model: Deterministic (Constant) Outliers
 outlier_rcbd2 <- function(blocks, treatments, sigma_e, sigma_b, delta_G, pi) {
 
   data <- expand.grid(
@@ -150,13 +131,12 @@ outlier_rcbd2 <- function(blocks, treatments, sigma_e, sigma_b, delta_G, pi) {
   )
 
   alpha_t <- rep(0, treatments)
-  
   beta_b <- rnorm(blocks, 0, sigma_b)
 
   n <- nrow(data)
-
   outlier <- runif(n) < pi
 
+  # Contaminated elements receive an exact constant magnitude offset (delta_G)
   e <- rnorm(n, 0, sigma_e)
   e[outlier] <- rep(delta_G, sum(outlier))
 
@@ -166,7 +146,6 @@ outlier_rcbd2 <- function(blocks, treatments, sigma_e, sigma_b, delta_G, pi) {
     e
 
   model <- aov(response ~ treatment + block, data = data)
-
   anova_tbl <- anova(model) |> tidy()
 
   F_stat <- anova_tbl |>
@@ -191,8 +170,8 @@ outlier_rcbd2 <- function(blocks, treatments, sigma_e, sigma_b, delta_G, pi) {
     pull(meansq)
   
   MS_treatment <- anova_tbl |>
-  filter(term == "treatment") |>
-  pull(meansq)
+    filter(term == "treatment") |>
+    pull(meansq)
 
   tibble(
     F_stat = F_stat,
@@ -206,6 +185,8 @@ outlier_rcbd2 <- function(blocks, treatments, sigma_e, sigma_b, delta_G, pi) {
 ```
 
 ```{r}
+# EXPERIMENT 2: CONSTANT OUTLIER SIMULATIONS
+
 set.seed(100)
 
 outlier_pi_curve2 <- map_dfr(pi_grid, function(pi) {
@@ -226,6 +207,8 @@ outlier_pi_curve2 <- map_dfr(pi_grid, function(pi) {
 ```
 
 ```{r}
+# Display Type I Error performance curves under constant directional asymmetry
+
 ggplot(outlier_pi_curve2,
        aes(x = pi, y = type1_error)) +
   geom_line() +
@@ -240,6 +223,7 @@ ggplot(outlier_pi_curve2,
 ```
 
 ```{r}
+### 3. Mixture Model: Heavy-Tailed Cauchy Outliers
 outlier_rcbd3 <- function(blocks, treatments, sigma_e, sigma_b,
                          gamma_G, pi) {
 
@@ -249,15 +233,14 @@ outlier_rcbd3 <- function(blocks, treatments, sigma_e, sigma_b,
   )
 
   alpha_t <- rep(0, treatments)
-  
   beta_b <- rnorm(blocks, 0, sigma_b)
 
   n <- nrow(data)
-
   outlier <- runif(n) < pi
 
   e <- rnorm(n, 0, sigma_e)
 
+  # Contaminated profiles modeled using Cauchy distribution scaling indexes
   e[outlier] <- rcauchy(sum(outlier), location = 0, scale = gamma_G)
 
   data$response <-
@@ -266,7 +249,6 @@ outlier_rcbd3 <- function(blocks, treatments, sigma_e, sigma_b,
     e
 
   model <- aov(response ~ treatment + block, data = data)
-
   anova_tbl <- anova(model) |> tidy()
 
   F_stat <- anova_tbl |>
@@ -291,8 +273,8 @@ outlier_rcbd3 <- function(blocks, treatments, sigma_e, sigma_b,
     pull(meansq)
   
   MS_treatment <- anova_tbl |>
-  filter(term == "treatment") |>
-  pull(meansq)
+    filter(term == "treatment") |>
+    pull(meansq)
 
   tibble(
     F_stat = F_stat,
@@ -306,6 +288,8 @@ outlier_rcbd3 <- function(blocks, treatments, sigma_e, sigma_b,
 ```
 
 ```{r}
+# EXPERIMENT 3: HEAVY-TAILED CAUCHY OUTLIER SIMULATIONS
+
 set.seed(100)
 
 outlier_pi_curve3 <- map_dfr(pi_grid, function(pi) {
@@ -326,6 +310,8 @@ outlier_pi_curve3 <- map_dfr(pi_grid, function(pi) {
 ```
 
 ```{r}
+# Display Type I Error performance curves under heavy-tailed (Cauchy) outliers
+
 ggplot(outlier_pi_curve3,
        aes(x = pi, y = type1_error)) +
   geom_line() +
@@ -340,6 +326,9 @@ ggplot(outlier_pi_curve3,
 ```
 
 ```{r}
+# DIAGNOSTIC PROFILE GENERATORS (HISTOGRAM EXTRACTORS)
+
+# Helper to capture single data states matching contaminated normal criteria
 normal_hist <- function(blocks, treatments, sigma_e, sigma_b,
                          sigma_G, pi) {
 
@@ -371,6 +360,8 @@ hist(normal_hist_data, breaks = 50)
 ```
 
 ```{r}
+# Helper to capture single data states matching constant outlier criteria
+
 constant_hist <- function(blocks, treatments, sigma_e, sigma_b, delta_G, pi) {
 
   data <- expand.grid(
@@ -401,6 +392,8 @@ hist(constant_hist_data, breaks = 50)
 ```
 
 ```{r}
+# Helper to capture single data states matching Cauchy criteria
+
 cauchy_hist <- function(blocks, treatments, sigma_e, sigma_b,
                          gamma_G, pi) {
 
