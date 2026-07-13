@@ -1,0 +1,443 @@
+---
+title: "RCBD Variance Simulation Study"
+output: html_document
+---
+
+# Packages Used
+```{r}
+library(tidyverse)
+library(broom)
+```
+
+# Homoscedastic RCBD Simulation Model
+```{r}
+R2_sim_het <- function(blocks,
+                       treatments,
+                       mu,
+                       sigma_b,
+                       R2_target,
+                       response_type = "normal") {
+
+  # Generate design matrix for a Randomized Complete Block Design (RCBD)
+  data <- expand.grid(
+    block = factor(1:blocks),
+    treatment = factor(1:treatments)
+  )
+
+  # Simulation parameters under the Null Hypothesis (no treatment effect)
+  alpha_t <- rep(0, treatments)
+  beta_b <- rnorm(blocks, 0, sigma_b) # Random block effects
+
+  # Calculate sum of squares for blocks to calibrate target R-squared
+  S <- treatments * sum((beta_b - mean(beta_b))^2)
+
+  # Homoscedastic baseline variance
+  Vbar <- 1
+
+  # Degrees of freedom allocations used for calculating target error variance
+  A1 <- treatments + blocks - 2
+  B1 <- treatments * blocks - 1
+
+  # Derive error standard deviation conditional on target R-squared
+  sigma <- sqrt(S * (1 - R2_target) /(Vbar * (R2_target * B1 - A1)))
+
+  # Construct true underlying linear predictor
+  mu_tb <- mu + alpha_t[data$treatment] + beta_b[data$block]
+
+  V_tb <- 1
+
+  # Generate homoscedastic error term
+  e <- rnorm(nrow(data), mean = 0, sd = sigma * sqrt(V_tb))
+  y1 <- mu_tb + e
+
+  # Taylor series approximation variables for Log-normal mapping transformations
+  Var_tb <- sigma^2 * V_tb
+  a_tb <- sqrt(log(1 + Var_tb / mu_tb^2)) / sqrt(Var_tb)
+  b_tb <- log(mu_tb) - a_tb * mu_tb - (a_tb^2 * Var_tb) / 2
+
+  # Apply targeted data distribution transformations
+  if (response_type == "normal") {
+    response <- y1
+  } else if (response_type == "lognormal") {
+    response <- exp(a_tb * y1 + b_tb)
+  } else if (response_type == "log") {
+    response <- a_tb * y1 + b_tb
+  } else if (response_type == "exp") {
+    response <- exp(y1)
+  }
+
+  data$response <- response
+
+  # Fit standard additive Two-Way ANOVA Model
+  model <- aov(response ~ treatment + block, data)
+  anova_tbl <- anova(model) |> tidy()
+
+  treatment_row <- anova_tbl |>
+    filter(term == "treatment")
+
+  F_stat <- treatment_row$statistic
+  p_value <- treatment_row$p.value
+
+  # Track empirical Type I Error rates (alpha = 0.05)
+  reject_F <- p_value < 0.05
+
+  # Track Family-Wise Error Rate (FWER) via Tukey's HSD pairwise adjustments
+  tukey_reject <- TukeyHSD(model, "treatment")$treatment |>
+    as.data.frame() |>
+    pull(`p adj`) |>
+    (\(x) any(x < 0.05))()
+
+  R2 <- summary(lm(response ~ treatment + block, data))$r.squared
+
+  # Extract Mean Squares for distribution analysis
+  MS_error <- anova_tbl |>
+    filter(term == "Residuals") |>
+    pull(meansq)
+  
+  MS_treatment <- anova_tbl |>
+    filter(term == "treatment") |>
+    pull(meansq)
+
+  tibble(
+    F_stat = F_stat,
+    reject_F = reject_F,
+    R2 = R2,
+    tukey_reject = tukey_reject,
+    MSE = MS_error,
+    MSa = MS_treatment
+  )
+}
+```
+
+# EXPERIMENT 1: HOMOSCEDASTIC SIMULATIONS & EVALUATION
+```{r}
+set.seed(100)
+R2_target <- 0.5
+
+# Monte Carlo iterations (N = 10,000 per transformation type)
+results_normal    <- map_dfr(1:10000, ~ R2_sim_het(7, 8, 20, 3, R2_target, "normal"))
+results_lognormal <- map_dfr(1:10000, ~ R2_sim_het(7, 8, 20, 3, R2_target, "lognormal"))
+results_log       <- map_dfr(1:10000, ~ R2_sim_het(7, 8, 20, 3, R2_target, "log"))
+results_exp       <- map_dfr(1:10000, ~ R2_sim_het(7, 8, 20, 3, R2_target, "exp"))
+
+# Aggregate operating performance characteristics across transformations
+results <- bind_rows(
+  normal = results_normal,
+  lognormal = results_lognormal,
+  log = results_log,
+  exp = results_exp,
+  .id = "dataset"
+) |>
+  group_by(dataset) |>
+  summarise(
+    type1_error = mean(reject_F), # Empirical Type I error rate
+    mean_F = mean(F_stat),
+    var_F = var(F_stat),
+    mean_MSa = mean(MSa),
+    var_MSa = var(MSa),
+    mean_MSE = mean(MSE),
+    var_MSE = var(MSE),
+    mean_R2 = mean(R2),
+    tukey_fwer = mean(tukey_reject) # Family-wise error rate inflation assessment
+  )
+```
+
+
+# Plotting Empirical Type I Error Rates for Homoscedastic Data Structures
+```{r}
+ggplot(results, aes(x = dataset, y = type1_error)) +
+  geom_bar(stat = "identity", fill = "red3") +
+  geom_hline(yintercept = 0.05, linetype = "dashed") + # Nominal alpha threshold
+  labs(
+    x = "Transformation",
+    y = "Type I Error Rate",
+    title = "Type I Error Rate for Homoscedastic Data With Transformations"
+  ) +
+  ylim(0, 0.08) +
+  theme_bw()
+```
+
+# Heteroscedastic Simulation Model (Variance Proportional to Squared Mean)
+```{r}
+R2_sim_mu2 <- function(blocks,
+                       treatments,
+                       mu,
+                       sigma_b,
+                       R2_target,
+                       response_type = "normal") {
+
+  data <- expand.grid(
+    block = factor(1:blocks),
+    treatment = factor(1:treatments)
+  )
+
+  alpha_t <- rep(0, treatments)
+  beta_b <- rnorm(blocks, 0, sigma_b)
+
+  S <- treatments * sum((beta_b - mean(beta_b))^2)
+
+  # CRITICAL STRUCTURAL CHANGE: Variance weight is defined as mean^2 matrix
+  mean_matrix <- outer(
+    alpha_t,
+    beta_b,
+    function(alpha, beta) mu + alpha + beta
+  )
+  variance_matrix <- mean_matrix^2
+  Vbar <- mean(variance_matrix)
+
+  A1 <- treatments + blocks - 2
+  B1 <- treatments * blocks - 1
+
+  sigma <- sqrt(S * (1 - R2_target) /(Vbar * (R2_target * B1 - A1)))
+  mu_tb <- mu + alpha_t[data$treatment] + beta_b[data$block]
+
+  # Assign variance proportional to cell expectation squared
+  V_tb <- mu_tb^2
+
+  # Error term generation containing cell-specific heteroscedastic weights
+  e <- rnorm(nrow(data), mean = 0, sd = sigma * sqrt(V_tb))
+  y1 <- mu_tb + e
+
+  Var_tb <- sigma^2 * V_tb
+  a_tb <- sqrt(log(1 + Var_tb / mu_tb^2)) / sqrt(Var_tb)
+  b_tb <- log(mu_tb) - a_tb * mu_tb - (a_tb^2 * Var_tb) / 2
+
+  if (response_type == "normal") {
+    response <- y1
+  } else if (response_type == "lognormal") {
+    response <- exp(a_tb * y1 + b_tb)
+  } else if (response_type == "log") {
+    response <- a_tb * y1 + b_tb
+  } else if (response_type == "exp") {
+    response <- exp(y1)
+  }
+
+  data$response <- response
+
+  model <- aov(response ~ treatment + block, data)
+  anova_tbl <- anova(model) |> tidy()
+
+  treatment_row <- anova_tbl |>
+    filter(term == "treatment")
+
+  F_stat <- treatment_row$statistic
+  p_value <- treatment_row$p.value
+  reject_F <- p_value < 0.05
+
+  tukey_reject <- TukeyHSD(model, "treatment")$treatment |>
+    as.data.frame() |>
+    pull(`p adj`) |>
+    (\(x) any(x < 0.05))()
+
+  R2 <- summary(lm(response ~ treatment + block, data))$r.squared
+
+  MS_error <- anova_tbl |>
+    filter(term == "Residuals") |>
+    pull(meansq)
+  
+  MS_treatment <- anova_tbl |>
+    filter(term == "treatment") |>
+    pull(meansq)
+
+  tibble(
+    F_stat = F_stat,
+    reject_F = reject_F,
+    R2 = R2,
+    tukey_reject = tukey_reject,
+    MSE = MS_error,
+    MSa = MS_treatment
+  )
+}
+```
+
+
+# EXPERIMENT 2: HETEROSCEDASTIC (PROP TO MEAN) SIMULATIONS
+```{r}
+set.seed(100)
+
+results_normal1 <- map_dfr(1:10000, ~ R2_sim_mu2(7, 8, 20, 3, R2_target, "normal"))
+
+results_lognormal1 <- map_dfr(1:10000, ~ R2_sim_mu2(7, 8, 20, 3, R2_target, "lognormal"))
+
+results_log1 <- map_dfr(1:10000, ~ R2_sim_mu2(7, 8, 20, 3, R2_target, "log"))
+
+results_exp1 <- map_dfr(1:10000, ~ R2_sim_mu2(7, 8, 20, 3, R2_target, "exp"))
+
+results1 <- bind_rows(
+  normal = results_normal1,
+  lognormal = results_lognormal1,
+  log = results_log1,
+  exp = results_exp1,
+  .id = "dataset"
+) |>
+  group_by(dataset) |>
+  summarise(
+    type1_error = mean(reject_F),
+    mean_F = mean(F_stat),
+    var_F = var(F_stat),
+    mean_MSa = mean(MSa),
+    var_MSa = var(MSa),
+    mean_MSE = mean(MSE),
+    var_MSE = var(MSE),
+    mean_R2 = mean(R2),
+    tukey_fwer = mean(tukey_reject)
+  )
+```
+
+
+# Plotting Empirical Type I Error Rates for Variance Proportional to Mean Matrix
+```{r}
+ggplot(results1, aes(x = dataset, y = type1_error)) +
+  geom_bar(stat = "identity", fill = "red3") +
+  geom_hline(yintercept = 0.05, linetype = "dashed") +
+  labs(
+    x = "Transformation",
+    y = "Type I Error Rate",
+    title = "Type I Error Rate for Normal Data With Transformations",
+    subtitle = "Variance proportional to mean"
+  ) +
+  ylim(0, 0.08) +
+  theme_bw()
+```
+
+# Heteroscedastic Simulation Model (Variance Proportional to Block Effect Squared)
+```{r}
+R2_sim_b2 <- function(blocks,
+                       treatments,
+                       mu,
+                       sigma_b,
+                       R2_target,
+                       response_type = "normal") {
+
+  data <- expand.grid(
+    block = factor(1:blocks),
+    treatment = factor(1:treatments)
+  )
+
+  alpha_t <- rep(0, treatments)
+  beta_b <- rnorm(blocks, 0, sigma_b)
+
+  S <- treatments * sum((beta_b - mean(beta_b))^2)
+
+  # CRITICAL STRUCTURAL CHANGE: Variance weight is defined purely by block components
+  variance_matrix <- outer(
+    alpha_t,
+    beta_b,
+    function(alpha, beta) beta^2
+  )
+  Vbar <- mean(variance_matrix)
+
+  A1 <- treatments + blocks - 2
+  B1 <- treatments * blocks - 1
+
+  sigma <- sqrt(S * (1 - R2_target) /(Vbar * (R2_target * B1 - A1)))
+  mu_tb <- mu + alpha_t[data$treatment] + beta_b[data$block]
+
+  # Assign variance structural weights strictly proportional to beta^2
+  V_tb <- beta_b[data$block]^2
+
+  e <- rnorm(nrow(data), mean = 0, sd = sigma * sqrt(V_tb))
+  y1 <- mu_tb + e
+
+  Var_tb <- sigma^2 * V_tb
+  a_tb <- sqrt(log(1 + Var_tb / mu_tb^2)) / sqrt(Var_tb)
+  b_tb <- log(mu_tb) - a_tb * mu_tb - (a_tb^2 * Var_tb) / 2
+
+  if (response_type == "normal") {
+    response <- y1
+  } else if (response_type == "lognormal") {
+    response <- exp(a_tb * y1 + b_tb)
+  } else if (response_type == "log") {
+    response <- a_tb * y1 + b_tb
+  } else if (response_type == "exp") {
+    response <- exp(y1)
+  }
+
+  data$response <- response
+
+  model <- aov(response ~ treatment + block, data)
+  anova_tbl <- anova(model) |> tidy()
+
+  treatment_row <- anova_tbl |>
+    filter(term == "treatment")
+
+  F_stat <- treatment_row$statistic
+  p_value <- treatment_row$p.value
+  reject_F <- p_value < 0.05
+
+  tukey_reject <- TukeyHSD(model, "treatment")$treatment |>
+    as.data.frame() |>
+    pull(`p adj`) |>
+    (\(x) any(x < 0.05))()
+
+  R2 <- summary(lm(response ~ treatment + block, data))$r.squared
+
+  MS_error <- anova_tbl |>
+    filter(term == "Residuals") |>
+    pull(meansq)
+
+  MS_treatment <- anova_tbl |>
+    filter(term == "treatment") |>
+    pull(meansq)
+
+  tibble(
+    F_stat = F_stat,
+    reject_F = reject_F,
+    R2 = R2,
+    tukey_reject = tukey_reject,
+    MSE = MS_error,
+    MSa = MS_treatment
+  )
+}
+```
+
+
+# EXPERIMENT 3: HETEROSCEDASTIC (PROP TO BLOCK) SIMULATIONS
+```{r}
+set.seed(100)
+
+results_normal2 <- map_dfr(1:10000, ~ R2_sim_b2(7, 8, 20, 3, R2_target, "normal"))
+
+results_lognormal2 <- map_dfr(1:10000, ~ R2_sim_b2(7, 8, 20, 3, R2_target, "lognormal"))
+
+results_log2 <- map_dfr(1:10000, ~ R2_sim_b2(7, 8, 20, 3, R2_target, "log"))
+
+results_exp2 <- map_dfr(1:10000, ~ R2_sim_b2(7, 8, 20, 3, R2_target, "exp"))
+
+results2 <- bind_rows(
+  normal = results_normal2,
+  lognormal = results_lognormal2,
+  log = results_log2,
+  exp = results_exp2,
+  .id = "dataset"
+) |>
+  group_by(dataset) |>
+  summarise(
+    type1_error = mean(reject_F),
+    mean_F = mean(F_stat),
+    var_F = var(F_stat),
+    mean_MSa = mean(MSa),
+    var_MSa = var(MSa),
+    mean_MSE = mean(MSE),
+    var_MSE = var(MSE),
+    mean_R2 = mean(R2),
+    tukey_fwer = mean(tukey_reject)
+  )
+```
+
+
+# Plotting Empirical Type I Error Rates for Variance Proportional to Block Variance
+```{r}
+ggplot(results2, aes(x = dataset, y = type1_error)) +
+  geom_bar(stat = "identity", fill = "red3") +
+  geom_hline(yintercept = 0.05, linetype = "dashed") +
+  labs(
+    x = "Transformation",
+    y = "Type I Error Rate",
+    title = "Type I Error Rate for Heteroscedastic Data With Transformations",
+    subtitle = "Variance proportional to block effect"
+  ) +
+  ylim(0, 0.08) +
+  theme_bw()
+```
+

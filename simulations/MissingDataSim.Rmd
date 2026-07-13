@@ -1,0 +1,262 @@
+ ---
+title: "RCBD Missing Data Simulation Study"
+output: html_document
+---
+# Packages Used
+```{r}
+library(tidyverse)
+library(broom)
+library(tictoc)
+```
+
+# Missing Data Generating Function
+```{r}
+missing_sim <- function(blocks,
+                        treatments,
+                        sigma_b,
+                        sigma,
+                        missing_pct,
+                        n_missing_sims) {
+
+  # Generate design matrix for a Randomized Complete Block Design (RCBD)
+  data_complete <- expand.grid(
+    block = factor(1:blocks),
+    treatment = factor(1:treatments)
+  )
+
+  # Simulation parameters under the Null Hypothesis (no treatment effect)
+  alpha_t <- rep(0, treatments)
+  beta_b <- rnorm(blocks, 0, sigma_b) # Random block effects
+
+  # Construct true underlying linear predictor
+  mu_tb <- alpha_t[data_complete$treatment] + beta_b[data_complete$block]
+
+  # Generate homoscedastic error term
+  e <- rnorm(nrow(data_complete), mean = 0, sd = sigma)
+
+  data_complete$response <- mu_tb + e
+
+
+  # Analyze complete dataset once per outer simulation
+  complete_model <- aov(response ~ treatment + block, data_complete)
+
+  complete_anova_tbl <- anova(complete_model) |>
+    tidy()
+
+  complete_treatment_row <- complete_anova_tbl |>
+    filter(term == "treatment")
+
+  complete_F_stat <- complete_treatment_row$statistic
+  complete_p_value <- complete_treatment_row$p.value
+
+  # Track empirical Type I Error rates (alpha = 0.05)
+  complete_reject_F <- complete_p_value < 0.05
+
+  # Track Family-Wise Error Rate (FWER) via Tukey's HSD pairwise adjustments
+  complete_tukey_reject <- TukeyHSD(complete_model,"treatment")$treatment |>
+    as.data.frame() |>
+    pull(`p adj`) |>
+    (\(x) any(x < 0.05))()
+
+  complete_R2 <- summary(
+    lm(response ~ treatment + block, data_complete)
+  )$r.squared
+
+  # Extract Mean Squares for distribution analysis
+  complete_MS_error <- complete_anova_tbl |>
+    filter(term == "Residuals") |>
+    pull(meansq)
+
+  complete_MS_treatment <- complete_anova_tbl |>
+    filter(term == "treatment") |>
+    pull(meansq)
+
+  complete_results <- tibble(
+    missing_simulation = NA_integer_,
+    method = "complete",
+    F_stat = complete_F_stat,
+    p_value = complete_p_value,
+    reject_F = complete_reject_F,
+    R2 = complete_R2,
+    tukey_reject = complete_tukey_reject,
+    MSE = complete_MS_error,
+    MSa = complete_MS_treatment,
+    n_missing = 0L,
+    missing_proportion = 0
+  )
+
+
+  # Repeat missing data generation for the same complete dataset
+  missing_results <- map_dfr(1:n_missing_sims, ~ {
+
+      # Generate Missing Completely at Random (MCAR) responses
+      data_missing <- data_complete
+
+      n_missing <- round(nrow(data_missing) * missing_pct)
+
+      # Resample missing observations until every treatment and block
+      # retains at least one observed response
+      valid_missing_pattern <- FALSE
+
+      while (!valid_missing_pattern) {
+
+        missing_rows <- sample(
+          1:nrow(data_missing),
+          n_missing,
+          replace = FALSE
+        )
+
+        observed_data <- data_missing[-missing_rows, ]
+
+        valid_missing_pattern <-
+          n_distinct(observed_data$treatment) == treatments &&
+          n_distinct(observed_data$block) == blocks
+      }
+
+      data_missing$response[missing_rows] <- NA
+
+
+      # Apply unconditional mean imputation
+      data_mean <- data_missing
+
+      data_mean$response[is.na(data_mean$response)] <-
+        mean(data_mean$response, na.rm = TRUE)
+
+
+      # Apply conditional mean imputation by treatment
+      data_CMIT <- data_missing |>
+        group_by(treatment) |>
+        mutate(
+          response = if_else(
+            is.na(response),
+            mean(response, na.rm = TRUE),
+            response
+          )
+        ) |>
+        ungroup()
+
+
+      # Apply conditional mean imputation by block
+      data_CMIB <- data_missing |>
+        group_by(block) |>
+        mutate(
+          response = if_else(
+            is.na(response),
+            mean(response, na.rm = TRUE),
+            response
+          )
+        ) |>
+        ungroup()
+
+
+      # Apply linear regression imputation
+      data_linear <- data_missing
+
+      imputation_model <- lm(response ~ treatment + block, data_linear)
+
+      data_linear$response[is.na(data_linear$response)] <- predict(
+        imputation_model,
+        newdata = data_linear[is.na(data_linear$response), ]
+      )
+
+
+      # Combine imputed datasets for analysis
+      simulation_datasets <- list(
+        mean_imp = data_mean,
+        linear_imp = data_linear,
+        CMIT = data_CMIT,
+        CMIB = data_CMIB
+      )
+
+
+      # Fit standard additive Two-Way ANOVA Model for each imputation method
+      method_results <- imap_dfr(simulation_datasets, ~ {
+
+          data <- .x
+          method <- .y
+
+          model <- aov(response ~ treatment + block, data)
+
+          anova_tbl <- anova(model) |>
+            tidy()
+
+          treatment_row <- anova_tbl |>
+            filter(term == "treatment")
+
+          F_stat <- treatment_row$statistic
+          p_value <- treatment_row$p.value
+
+          # Track empirical Type I Error rates (alpha = 0.05)
+          reject_F <- p_value < 0.05
+
+          # Track Family-Wise Error Rate (FWER) via Tukey's HSD pairwise adjustments
+          tukey_reject <- TukeyHSD(model, "treatment")$treatment |>
+            as.data.frame() |>
+            pull(`p adj`) |>
+            (\(x) any(x < 0.05))()
+
+          R2 <- summary(lm(response ~ treatment + block, data))$r.squared
+
+          # Extract Mean Squares for distribution analysis
+          MS_error <- anova_tbl |>
+            filter(term == "Residuals") |>
+            pull(meansq)
+
+          MS_treatment <- anova_tbl |>
+            filter(term == "treatment") |>
+            pull(meansq)
+
+          tibble(
+            method = method,
+            F_stat = F_stat,
+            p_value = p_value,
+            reject_F = reject_F,
+            R2 = R2,
+            tukey_reject = tukey_reject,
+            MSE = MS_error,
+            MSa = MS_treatment,
+            n_missing = n_missing,
+            missing_proportion = n_missing / nrow(data_missing)
+          )
+        }
+      )
+
+      method_results
+    },
+    .id = "missing_simulation"
+  ) |>
+    mutate(missing_simulation = as.integer(missing_simulation))
+
+
+  # Combine complete and missing-data results
+  bind_rows(complete_results, missing_results)
+}
+```
+
+# RCBD MISSING-DATA SIMULATIONS & EVALUATION
+
+```{r}
+set.seed(123)
+
+simulation_results <- map_dfr(1:1000, ~ missing_sim(7, 8, 3, 3, 0.25, 10),
+                              .id = "dataset") |>
+  mutate(dataset = as.integer(dataset))
+
+# Aggregate operating performance characteristics across imputation methods
+results <- simulation_results |>
+  group_by(method) |>
+  summarise(
+    type1_error = mean(reject_F),
+    mean_F = mean(F_stat),
+    var_F = var(F_stat),
+    mean_MSa = mean(MSa),
+    var_MSa = var(MSa),
+    mean_MSE = mean(MSE),
+    var_MSE = var(MSE),
+    mean_R2 = mean(R2),
+    tukey_fwer = mean(tukey_reject)
+  )
+```
+
+
+
