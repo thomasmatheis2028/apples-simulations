@@ -60,9 +60,9 @@ R2_sim_het <- function(blocks,
     response <- y1
   } else if (response_type == "lognormal") {
     response <- exp(a_tb * y1 + b_tb)
-  } else if (response_type == "log") {
+  } else if (response_type == "log(lognormal)") {
     response <- a_tb * y1 + b_tb
-  } else if (response_type == "exp") {
+  } else if (response_type == "exponential") {
     response <- exp(y1)
   }
 
@@ -115,17 +115,21 @@ set.seed(123)
 R2_target <- 0.5
 
 # Monte Carlo iterations (N = 10,000 per transformation type)
-results_normal    <- map_dfr(1:10000, ~ R2_sim_het(7, 8, 20, 3, R2_target, "normal"))
-results_lognormal <- map_dfr(1:10000, ~ R2_sim_het(7, 8, 20, 3, R2_target, "lognormal"))
-results_log       <- map_dfr(1:10000, ~ R2_sim_het(7, 8, 20, 3, R2_target, "log"))
-results_exp       <- map_dfr(1:10000, ~ R2_sim_het(7, 8, 20, 3, R2_target, "exp"))
+results_normal    <- map_dfr(1:10000, ~ R2_sim_het(7, 8, 20, 3, R2_target, 
+                                                   "normal"))
+results_lognormal <- map_dfr(1:10000, ~ R2_sim_het(7, 8, 20, 3, R2_target, 
+                                                   "lognormal"))
+results_log       <- map_dfr(1:10000, ~ R2_sim_het(7, 8, 20, 3, R2_target, 
+                                                   "log(lognormal)"))
+results_exp       <- map_dfr(1:10000, ~ R2_sim_het(7, 8, 20, 3, R2_target, 
+                                                   "exponential"))
 
 # Aggregate operating performance characteristics across transformations
-results <- bind_rows(
+results1 <- bind_rows(
   normal = results_normal,
   lognormal = results_lognormal,
-  log = results_log,
-  exp = results_exp,
+  log_lognormal = results_log,
+  exponential = results_exp,
   .id = "dataset"
 ) |>
   group_by(dataset) |>
@@ -142,20 +146,6 @@ results <- bind_rows(
   )
 ```
 
-
-# Plotting Empirical Type I Error Rates for Homoscedastic Data Structures
-```{r}
-ggplot(results, aes(x = dataset, y = type1_error)) +
-  geom_bar(stat = "identity", fill = "red3") +
-  geom_hline(yintercept = 0.05, linetype = "dashed") + # Nominal alpha threshold
-  labs(
-    x = "Transformation",
-    y = "Type I Error Rate",
-    title = "Type I Error Rate for Homoscedastic Data With Transformations"
-  ) +
-  ylim(0, 0.08) +
-  theme_bw()
-```
 
 # Heteroscedastic Simulation Model (Variance Proportional to Squared Mean)
 ```{r}
@@ -206,9 +196,9 @@ R2_sim_mu2 <- function(blocks,
     response <- y1
   } else if (response_type == "lognormal") {
     response <- exp(a_tb * y1 + b_tb)
-  } else if (response_type == "log") {
+  } else if (response_type == "log(lognormal)") {
     response <- a_tb * y1 + b_tb
-  } else if (response_type == "exp") {
+  } else if (response_type == "exponential") {
     response <- exp(y1)
   }
 
@@ -255,19 +245,23 @@ R2_sim_mu2 <- function(blocks,
 ```{r}
 set.seed(123)
 
-results_normal1 <- map_dfr(1:10000, ~ R2_sim_mu2(7, 8, 20, 3, R2_target, "normal"))
+results_normal1 <- map_dfr(1:10000, ~ R2_sim_mu2(7, 8, 20, 3, R2_target, 
+                                                 "normal"))
 
-results_lognormal1 <- map_dfr(1:10000, ~ R2_sim_mu2(7, 8, 20, 3, R2_target, "lognormal"))
+results_lognormal1 <- map_dfr(1:10000, ~ R2_sim_mu2(7, 8, 20, 3, R2_target, 
+                                                    "lognormal"))
 
-results_log1 <- map_dfr(1:10000, ~ R2_sim_mu2(7, 8, 20, 3, R2_target, "log"))
+results_log1 <- map_dfr(1:10000, ~ R2_sim_mu2(7, 8, 20, 3, R2_target, 
+                                              "log(lognormal)"))
 
-results_exp1 <- map_dfr(1:10000, ~ R2_sim_mu2(7, 8, 20, 3, R2_target, "exp"))
+results_exp1 <- map_dfr(1:10000, ~ R2_sim_mu2(7, 8, 20, 3, R2_target, 
+                                              "exponential"))
 
-results1 <- bind_rows(
+results2 <- bind_rows(
   normal = results_normal1,
   lognormal = results_lognormal1,
-  log = results_log1,
-  exp = results_exp1,
+  log_lognormal = results_log1,
+  exponential = results_exp1,
   .id = "dataset"
 ) |>
   group_by(dataset) |>
@@ -284,21 +278,6 @@ results1 <- bind_rows(
   )
 ```
 
-
-# Plotting Empirical Type I Error Rates for Variance Proportional to Mean Matrix
-```{r}
-ggplot(results1, aes(x = dataset, y = type1_error)) +
-  geom_bar(stat = "identity", fill = "red3") +
-  geom_hline(yintercept = 0.05, linetype = "dashed") +
-  labs(
-    x = "Transformation",
-    y = "Type I Error Rate",
-    title = "Type I Error Rate for Normal Data With Transformations",
-    subtitle = "Variance proportional to mean"
-  ) +
-  ylim(0, 0.08) +
-  theme_bw()
-```
 
 # Heteroscedastic Simulation Model (Variance Proportional to Block Effect Squared)
 ```{r}
@@ -347,9 +326,9 @@ R2_sim_b2 <- function(blocks,
     response <- y1
   } else if (response_type == "lognormal") {
     response <- exp(a_tb * y1 + b_tb)
-  } else if (response_type == "log") {
+  } else if (response_type == "log(lognormal)") {
     response <- a_tb * y1 + b_tb
-  } else if (response_type == "exp") {
+  } else if (response_type == "exponential") {
     response <- exp(y1)
   }
 
@@ -396,19 +375,23 @@ R2_sim_b2 <- function(blocks,
 ```{r}
 set.seed(123)
 
-results_normal2 <- map_dfr(1:10000, ~ R2_sim_b2(7, 8, 20, 3, R2_target, "normal"))
+results_normal2 <- map_dfr(1:10000, ~ R2_sim_b2(7, 8, 20, 3, R2_target, 
+                                                "normal"))
 
-results_lognormal2 <- map_dfr(1:10000, ~ R2_sim_b2(7, 8, 20, 3, R2_target, "lognormal"))
+results_lognormal2 <- map_dfr(1:10000, ~ R2_sim_b2(7, 8, 20, 3, R2_target,
+                                                   "lognormal"))
 
-results_log2 <- map_dfr(1:10000, ~ R2_sim_b2(7, 8, 20, 3, R2_target, "log"))
+results_log2 <- map_dfr(1:10000, ~ R2_sim_b2(7, 8, 20, 3, R2_target,
+                                             "log(lognormal)"))
 
-results_exp2 <- map_dfr(1:10000, ~ R2_sim_b2(7, 8, 20, 3, R2_target, "exp"))
+results_exp2 <- map_dfr(1:10000, ~ R2_sim_b2(7, 8, 20, 3, R2_target, 
+                                             "exponential"))
 
-results2 <- bind_rows(
+results3 <- bind_rows(
   normal = results_normal2,
   lognormal = results_lognormal2,
-  log = results_log2,
-  exp = results_exp2,
+  log_lognormal = results_log2,
+  exponential = results_exp2,
   .id = "dataset"
 ) |>
   group_by(dataset) |>
@@ -426,19 +409,5 @@ results2 <- bind_rows(
 ```
 
 
-# Plotting Empirical Type I Error Rates for Variance Proportional to Block Variance
-```{r}
-ggplot(results2, aes(x = dataset, y = type1_error)) +
-  geom_bar(stat = "identity", fill = "red3") +
-  geom_hline(yintercept = 0.05, linetype = "dashed") +
-  labs(
-    x = "Transformation",
-    y = "Type I Error Rate",
-    title = "Type I Error Rate for Heteroscedastic Data With Transformations",
-    subtitle = "Variance proportional to block effect"
-  ) +
-  ylim(0, 0.08) +
-  theme_bw()
-```
 
 

@@ -80,15 +80,15 @@ outlier_rcbd1 <- function(blocks, treatments, sigma_e, sigma_b,
 }
 ```
 
-# EXPERIMENT 1: CONTAMINATED NORMAL OUTLIERS (EXTREME VS MILD SCALE)
+# EXPERIMENT 1: CONTAMINATED NORMAL OUTLIERS
 ```{r}
-set.seed(100)
+set.seed(123)
 
-# Establish vector grid for contamination proportion bounds (0% to 10%)
-pi_grid <- seq(0, 0.1, by = 0.01)
+# Establish vector grid for contamination proportion bounds (0% to 20%)
+pi_grid <- seq(0, 0.2, by = 0.01)
 
 # Scenario A: Contamination using extreme normal outliers (sigma_G = 100)
-outlier_pi_curve <- map_dfr(pi_grid, function(pi) {
+outlier_pi_curve1 <- map_dfr(pi_grid, function(pi) {
   map_dfr(1:10000, ~ outlier_rcbd1(7, 8, 3, 3, 100, pi)) |>
     summarise(
       pi = pi,
@@ -103,22 +103,6 @@ outlier_pi_curve <- map_dfr(pi_grid, function(pi) {
       tukey_fwer = mean(tukey_reject)
     )
 })
-```
-
-
-# Display Type I Error robustness behavior across extreme variance scales
-```{r}
-ggplot(outlier_pi_curve,
-       aes(x = pi, y = type1_error)) +
-  geom_line() +
-  geom_point() +
-  labs(
-    x = expression(pi),
-    y = "Type I Error Rate",
-    title = "Type I Error Rate for Data With Extreme Normal Outliers"
-  ) +
-  ylim(0, 0.1) +
-  theme_bw()
 ```
 
 
@@ -188,7 +172,7 @@ outlier_rcbd2 <- function(blocks, treatments, sigma_e, sigma_b, delta_G, pi) {
 
 # EXPERIMENT 2: CONSTANT OUTLIER SIMULATIONS
 ```{r}
-set.seed(100)
+set.seed(123)
 
 outlier_pi_curve2 <- map_dfr(pi_grid, function(pi) {
   map_dfr(1:10000, ~ outlier_rcbd2(7, 8, 3, 3, 100, pi)) |>
@@ -205,22 +189,6 @@ outlier_pi_curve2 <- map_dfr(pi_grid, function(pi) {
       tukey_fwer = mean(tukey_reject)
     )
 })
-```
-
-
-# Display Type I Error performance curves under constant directional asymmetry
-```{r}
-ggplot(outlier_pi_curve2,
-       aes(x = pi, y = type1_error)) +
-  geom_line() +
-  geom_point() +
-  labs(
-    x = expression(pi),
-    y = "Type I Error Rate",
-    title = "Type I Error Rate for Data With Extreme Constant Outliers"
-  ) +
-  ylim(0, 0.1) +
-  theme_bw()
 ```
 
 
@@ -291,7 +259,7 @@ outlier_rcbd3 <- function(blocks, treatments, sigma_e, sigma_b,
 
 # EXPERIMENT 3: HEAVY-TAILED CAUCHY OUTLIER SIMULATIONS
 ```{r}
-set.seed(100)
+set.seed(123)
 
 outlier_pi_curve3 <- map_dfr(pi_grid, function(pi) {
   map_dfr(1:10000, ~ outlier_rcbd3(7, 8, 3, 3, 25, pi)) |>
@@ -310,19 +278,4 @@ outlier_pi_curve3 <- map_dfr(pi_grid, function(pi) {
 })
 ```
 
-
-# Display Type I Error performance curves under heavy-tailed (Cauchy) outliers
-```{r}
-ggplot(outlier_pi_curve3,
-       aes(x = pi, y = type1_error)) +
-  geom_line() +
-  geom_point() +
-  labs(
-    x = expression(pi),
-    y = "Type I Error Rate",
-    title = "Type I Error Rate for Data With Extreme Cauchy Outliers"
-  ) +
-  ylim(0, 0.1) +
-  theme_bw()
-```
 
