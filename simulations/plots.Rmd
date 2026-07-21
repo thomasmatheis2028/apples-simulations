@@ -1,0 +1,199 @@
+---
+title: "Plots"
+output: html_document
+---
+
+# Packages Used
+```{r}
+library(tidyverse)
+```
+
+# Variance Plot
+```{r}
+# Color Palette
+okabe_ito <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00",
+  "#CC79A7", "#999999")
+
+# Read and combine results, add 95% Monte Carlo intervals
+var_results <- var_results <- c(
+  "homogeneous" = "homo_data.csv",
+  "heterogeneous-mean" = "hetero_mean_data.csv",
+  "heterogeneous-block" = "hetero_beta_data.csv"
+  ) |>
+  map_dfr(read_csv, .id = "variance") |>
+  mutate(
+    dataset = factor(
+      dataset,
+      levels = c(
+        "normal",
+        "lognormal",
+        "log_lognormal",
+        "exponential"
+      ),
+      labels = c(
+        "Normal",
+        "Lognormal",
+        "Log-lognormal",
+        "Exponential"
+      )
+    ),
+    variance = factor(
+      variance,
+      levels = c(
+        "homogeneous",
+        "heterogeneous-mean",
+        "heterogeneous-block"
+      ),
+      labels = c(
+        "Homogeneous",
+        "Heterogeneous mean",
+        "Heterogeneous block"
+      )
+    ),
+    mcse = sqrt(type1_error * (1 - type1_error) / 10000),
+    lower = pmax(0, type1_error - 1.96 * mcse),
+    upper = pmin(1, type1_error + 1.96 * mcse)
+  )
+
+pd <- position_dodge(width = 0.45)
+
+# Plot
+p_variance <- ggplot(
+  var_results,
+  aes(
+    x = dataset,
+    y = type1_error,
+    color = variance,
+    shape = variance
+  )
+) +
+  geom_hline(
+    yintercept = 0.05,
+    linetype = "dashed",
+    linewidth = 0.7
+  ) +
+  geom_errorbar(
+    aes(ymin = lower, ymax = upper),
+    position = pd,
+    width = 0.12,
+    linewidth = 0.5
+  ) +
+  geom_point(
+    position = pd,
+    size = 3
+  ) +
+  scale_y_continuous(
+    limits = c(0, 0.06),
+    breaks = seq(0, 0.06, 0.01),
+    labels = scales::label_percent(accuracy = 1),
+    expand = expansion(mult = c(0, 0.02))
+  ) +
+  scale_color_manual(
+    values = okabe_ito[1:3]
+  ) +
+  labs(
+    title = "Empirical Type I Error of RCBD ANOVA",
+    subtitle = "Dashed line indicates the nominal α = 0.05 level",
+    x = "Error distribution",
+    y = "Empirical Type I error rate",
+    color = "Variance condition",
+    shape = "Variance condition"
+  ) +
+  theme_classic(base_size = 11) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    plot.subtitle = element_text(size = 10),
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold"),
+    axis.text.x = element_text(margin = margin(t = 5))
+  )
+
+p_variance
+```
+
+# Outlier Plot
+```{r}
+# Read and combine results
+outlier_results <- c(
+  "Normal outliers" = "normal_outlier_data.csv",
+  "Constant outliers" = "constant_outlier_data.csv",
+  "Cauchy outliers" = "cauchy_outlier_data.csv"
+) |>
+  map_dfr(read_csv, .id = "outlier_condition") |>
+  mutate(
+    outlier_condition = factor(
+      outlier_condition,
+      levels = c(
+        "Normal outliers",
+        "Constant outliers",
+        "Cauchy outliers"
+      )
+    )
+  )
+
+# Add 95% Monte Carlo intervals
+outlier_results <- outlier_results |>
+  mutate(
+    mcse = sqrt(type1_error * (1 - type1_error) / 10000),
+    lower = pmax(0, type1_error - 1.96 * mcse),
+    upper = pmin(1, type1_error + 1.96 * mcse)
+  )
+
+pd <- position_dodge(width = 0.003)
+
+p_outliers <- ggplot(
+  outlier_results,
+  aes(
+    x = pi,
+    y = type1_error,
+    color = outlier_condition,
+    shape = outlier_condition,
+    group = outlier_condition
+  )
+) +
+  geom_hline(
+    yintercept = 0.05,
+    linetype = "dashed",
+    linewidth = 0.7
+  ) +
+  geom_errorbar(
+    aes(ymin = lower, ymax = upper),
+    width = 0.0025,
+    linewidth = 0.4,
+    alpha = 0.7
+  ) +
+  geom_line(linewidth = 0.7) +
+  geom_point(size = 2.6) +
+  scale_x_continuous(
+    breaks = seq(0, 0.20, 0.05),
+    labels = scales::label_percent(accuracy = 1),
+    expand = expansion(add = 0.004)
+  ) +
+  scale_y_continuous(
+    breaks = seq(0, 0.06, 0.01),
+    labels = scales::label_percent(accuracy = 1),
+    expand = expansion(mult = c(0, 0.02))
+  ) +
+  coord_cartesian(ylim = c(0, 0.06)) +
+  scale_color_manual(values = okabe_ito[1:3]) +
+  labs(
+    title = "Empirical Type I Error of RCBD ANOVA Under Outliers",
+    subtitle = "Dashed line indicates the nominal α = 0.05 level",
+    x = "Proportion of outliers",
+    y = "Empirical Type I error rate",
+    color = "Outlier condition",
+    shape = "Outlier condition"
+  ) +
+  theme_classic(base_size = 11) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    plot.subtitle = element_text(size = 10),
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold"),
+    axis.text.x = element_text(margin = margin(t = 5))
+  )
+
+p_outliers
+```
+
+
