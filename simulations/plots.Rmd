@@ -306,14 +306,6 @@ p_missing <- ggplot(
       angle = 25,
       hjust = 1,
       margin = margin(t = 5)
-    ),
-    axis.title.y.left = element_text(
-      color = okabe_ito[1],
-      face = "bold"
-    ),
-    axis.title.y.right = element_text(
-      color = okabe_ito[2],
-      face = "bold"
     )
   )
 
