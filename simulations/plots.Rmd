@@ -200,7 +200,7 @@ p_outliers
 # Missing Data Plot
 
 ```{r}
-# Read and clean results
+# Read and clean results, add Monte Carlo intervals
 missing_results <- read_csv("missing_data.csv") |>
   mutate(
     method = factor(
@@ -219,16 +219,18 @@ missing_results <- read_csv("missing_data.csv") |>
         "CMIT",
         "Linear imputation"
       )
-    )
+    ),
+    type1_mcse = sqrt(type1_error * (1 - type1_error) / 10000),
+    type1_lower = pmax(0, type1_error - 1.96 * type1_mcse),
+    type1_upper = pmin(1, type1_error + 1.96 * type1_mcse),
+
+    F_mcse = sqrt(var_F / 10000),
+    F_lower = mean_F - 1.96 * F_mcse,
+    F_upper = mean_F + 1.96 * F_mcse
   )
 
-# Converts mean F-statistics to the left-axis scale.
-# The secondary axis reverses this transformation.
 f_scale <- 5
-
 pd <- position_dodge(width = 0.35)
-
-f_reference <- 42 / (42 - 2)
 
 # Plot
 p_missing <- ggplot(
@@ -241,10 +243,20 @@ p_missing <- ggplot(
     linewidth = 0.7
   ) +
   geom_hline(
-    yintercept = f_reference / f_scale,
+    yintercept = 1.05 / f_scale,
     linetype = "dotted",
     linewidth = 0.7,
     color = okabe_ito[2]
+  ) +
+  geom_errorbar(
+    aes(
+      ymin = type1_lower,
+      ymax = type1_upper,
+      color = "Type I error"
+    ),
+    position = pd,
+    width = 0.12,
+    linewidth = 0.5
   ) +
   geom_point(
     aes(
@@ -255,6 +267,16 @@ p_missing <- ggplot(
     position = pd,
     size = 3
   ) +
+  geom_errorbar(
+    aes(
+      ymin = F_lower / f_scale,
+      ymax = F_upper / f_scale,
+      color = "Mean F-statistic"
+    ),
+    position = pd,
+    width = 0.12,
+    linewidth = 0.5
+  ) +
   geom_point(
     aes(
       y = mean_F / f_scale,
@@ -262,8 +284,9 @@ p_missing <- ggplot(
       shape = "Mean F-statistic"
     ),
     position = pd,
-    size = 4
+    size = 3
   ) +
+
   scale_y_continuous(
     name = "Empirical Type I error rate",
     breaks = seq(0, 0.50, 0.10),
@@ -275,33 +298,42 @@ p_missing <- ggplot(
     ),
     expand = expansion(mult = c(0, 0.03))
   ) +
+
   coord_cartesian(
     ylim = c(0, 0.50)
   ) +
+
   scale_color_manual(
     values = c(
       "Type I error" = okabe_ito[1],
       "Mean F-statistic" = okabe_ito[2]
     )
   ) +
+
   scale_shape_manual(
     values = c(
       "Type I error" = 16,
       "Mean F-statistic" = 18
     )
   ) +
+
   labs(
     title = "Type I Error and Mean F-statistic With Missing Data",
-    subtitle = "Dashed line: nominal α = 0.05; dotted line: expected null mean F = 1.05",
+    subtitle = paste(
+      "Dashed line: nominal α = 0.05;",
+      "dotted line: expected null mean F = 1.05"
+    ),
     x = "Missing-data method",
     color = NULL,
     shape = NULL
   ) +
+
   theme_classic(base_size = 11) +
   theme(
     plot.title = element_text(face = "bold"),
     plot.subtitle = element_text(size = 10),
     legend.position = "bottom",
+
     axis.text.x = element_text(
       angle = 25,
       hjust = 1,
@@ -311,4 +343,5 @@ p_missing <- ggplot(
 
 p_missing
 ```
+
 
