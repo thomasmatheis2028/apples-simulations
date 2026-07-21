@@ -141,6 +141,7 @@ outlier_results <- outlier_results |>
 
 pd <- position_dodge(width = 0.003)
 
+# Plot
 p_outliers <- ggplot(
   outlier_results,
   aes(
@@ -194,6 +195,121 @@ p_outliers <- ggplot(
   )
 
 p_outliers
+```
+
+# Missing Data Plot
+
+```{r}
+# Read and combine results
+missing_results <- read_csv("missing_data.csv") |>
+  mutate(
+    method = factor(
+      method,
+      levels = c(
+        "complete",
+        "CMIB",
+        "mean_imp",
+        "CMIT",
+        "linear_imp"
+      ),
+      labels = c(
+        "Complete data",
+        "CMIB",
+        "Mean imputation",
+        "CMIT",
+        "Linear imputation"
+      )
+    )
+  )
+
+# Converts mean F-statistics to the left-axis scale.
+# The secondary axis reverses this transformation.
+f_scale <- 5
+
+pd <- position_dodge(width = 0.35)
+
+# Plot
+p_missing <- ggplot(
+  missing_results,
+  aes(x = method)
+  ) +
+  geom_hline(
+    yintercept = 0.05,
+    linetype = "dashed",
+    linewidth = 0.7
+  ) +
+  geom_point(
+    aes(
+      y = type1_error,
+      color = "Type I error",
+      shape = "Type I error"
+    ),
+    position = pd,
+    size = 3
+  ) +
+  geom_point(
+    aes(
+      y = mean_F / f_scale,
+      color = "Mean F-statistic",
+      shape = "Mean F-statistic"
+    ),
+    position = pd,
+    size = 3
+  ) +
+  scale_y_continuous(
+    name = "Empirical Type I error rate",
+    breaks = seq(0, 0.50, 0.10),
+    labels = scales::label_percent(accuracy = 1),
+    sec.axis = sec_axis(
+      transform = ~ . * f_scale,
+      name = "Mean F-statistic",
+      breaks = seq(0, 2.5, 0.5)
+    ),
+    expand = expansion(mult = c(0, 0.03))
+  ) +
+  coord_cartesian(
+    ylim = c(0, 0.50)
+  ) +
+  scale_color_manual(
+    values = c(
+      "Type I error" = okabe_ito[1],
+      "Mean F-statistic" = okabe_ito[2]
+    )
+  ) +
+  scale_shape_manual(
+    values = c(
+      "Type I error" = 16,
+      "Mean F-statistic" = 18
+    )
+  ) +
+  labs(
+    title = "RCBD ANOVA Performance With Missing Data",
+    subtitle = "Dashed line indicates the nominal α = 0.05 level",
+    x = "Missing-data method",
+    color = NULL,
+    shape = NULL
+  ) +
+  theme_classic(base_size = 11) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    plot.subtitle = element_text(size = 10),
+    legend.position = "bottom",
+    axis.text.x = element_text(
+      angle = 25,
+      hjust = 1,
+      margin = margin(t = 5)
+    ),
+    axis.title.y.left = element_text(
+      color = okabe_ito[1],
+      face = "bold"
+    ),
+    axis.title.y.right = element_text(
+      color = okabe_ito[2],
+      face = "bold"
+    )
+  )
+
+p_missing
 ```
 
 
