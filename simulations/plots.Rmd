@@ -238,8 +238,7 @@ p_missing <- ggplot(
   geom_hline(
     yintercept = 0.05,
     linetype = "dashed",
-    linewidth = 0.7,
-    color = okabe_ito[1]
+    linewidth = 0.7
   ) +
   geom_hline(
     yintercept = f_reference / f_scale,
@@ -320,4 +319,5 @@ p_missing <- ggplot(
 
 p_missing
 ```
+
 
