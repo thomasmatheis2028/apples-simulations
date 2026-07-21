@@ -92,7 +92,7 @@ p_variance <- ggplot(
     values = okabe_ito[1:3]
   ) +
   labs(
-    title = "Empirical Type I Error of RCBD ANOVA",
+    title = "Empirical Type I Error of RCBD ANOVA Under Heteroskedasticity",
     subtitle = "Dashed line indicates the nominal α = 0.05 level",
     x = "Error distribution",
     y = "Empirical Type I error rate",
