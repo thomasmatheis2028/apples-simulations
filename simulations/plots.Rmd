@@ -262,7 +262,7 @@ p_missing <- ggplot(
       shape = "Mean F-statistic"
     ),
     position = pd,
-    size = 3
+    size = 4
   ) +
   scale_y_continuous(
     name = "Empirical Type I error rate",
@@ -311,5 +311,4 @@ p_missing <- ggplot(
 
 p_missing
 ```
-
 
