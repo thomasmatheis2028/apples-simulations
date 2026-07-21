@@ -200,7 +200,7 @@ p_outliers
 # Missing Data Plot
 
 ```{r}
-# Read and combine results
+# Read and clean results
 missing_results <- read_csv("missing_data.csv") |>
   mutate(
     method = factor(
@@ -228,6 +228,8 @@ f_scale <- 5
 
 pd <- position_dodge(width = 0.35)
 
+f_reference <- 42 / (42 - 2)
+
 # Plot
 p_missing <- ggplot(
   missing_results,
@@ -236,7 +238,14 @@ p_missing <- ggplot(
   geom_hline(
     yintercept = 0.05,
     linetype = "dashed",
-    linewidth = 0.7
+    linewidth = 0.7,
+    color = okabe_ito[1]
+  ) +
+  geom_hline(
+    yintercept = f_reference / f_scale,
+    linetype = "dotted",
+    linewidth = 0.7,
+    color = okabe_ito[2]
   ) +
   geom_point(
     aes(
@@ -283,8 +292,8 @@ p_missing <- ggplot(
     )
   ) +
   labs(
-    title = "RCBD ANOVA Performance With Missing Data",
-    subtitle = "Dashed line indicates the nominal α = 0.05 level",
+    title = "Type I Error and Mean F-statistic With Missing Data",
+    subtitle = "Dashed line: nominal α = 0.05; dotted line: expected null mean F = 1.05",
     x = "Missing-data method",
     color = NULL,
     shape = NULL
