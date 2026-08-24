@@ -236,7 +236,8 @@ missing_sim <- function(blocks,
 
 ```{r}
 set.seed(123)
-simulation_results <- map_dfr(1:10000, ~ missing_sim(7, 8, 3, 3, 0.25, 25),
+
+simulation_results <- map_dfr(1:1000, ~ missing_sim(7, 8, 3, 3, 0.25, 25),
                               .id = "dataset") |>
   mutate(dataset = as.integer(dataset))
 
@@ -255,5 +256,6 @@ results <- simulation_results |>
     tukey_fwer = mean(tukey_reject)
   )
 ```
+
 
 
