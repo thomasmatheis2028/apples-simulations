@@ -87,6 +87,7 @@ var_latex <- kable(
   var_table,
   format = "latex",
   booktabs = TRUE,
+  linesep = "",
   digits = 2,
   escape = FALSE,
   col.names = c(
@@ -104,6 +105,7 @@ out_latex <- kable(
   out_table,
   format = "latex",
   booktabs = TRUE,
+  linesep = "",
   digits = 2,
   escape = FALSE,
   col.names = c(
@@ -122,6 +124,7 @@ miss_latex <- kable(
   miss_table,
   format = "latex",
   booktabs = TRUE,
+  linesep = "",
   digits = 2,
   escape = FALSE,
   col.names = c(
