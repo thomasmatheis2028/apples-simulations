@@ -1,0 +1,138 @@
+---
+title: "tables"
+output: html_document
+---
+
+
+# Packages Used
+```{r}
+library(tidyverse)
+library(kableExtra)
+```
+
+
+# Loading Results
+```{r}
+var <- read_csv("var_results.csv")
+out <- read_csv("outlier_results.csv")
+miss <- read_csv("missing_data_results.csv")
+```
+
+
+# Selecting Data
+```{r}
+# Variance
+var_table <- var |>
+  filter(dataset == "Normal") |>
+  mutate(
+    Condition = recode(
+      variance,
+      "Homogeneous" = "Homoskedastic",
+      "Heterogeneous mean" = "Prop to Mean",
+      "Heterogeneous block" = "Prop to Block"
+    )
+  ) |>
+  select(Condition, type1_error, mean_F, var_F, mean_R2) |>
+  mutate(type1_error = 100 * type1_error)
+
+# Outliers
+out_table <- out |>
+  filter(pi == 0 | pi == 0.05 | pi == 0.10) |>
+  mutate(
+    Distribution = recode(
+      outlier_condition,
+      "Normal outliers" = "Normal",
+      "Constant outliers" = "Constant",
+      "Cauchy outliers" = "Cauchy"
+    ),
+    Distribution = factor(
+      Distribution,
+      levels = c("Normal", "Constant", "Cauchy")
+    ),
+    type1_error = 100 * type1_error
+  ) |>
+  arrange(Distribution, pi) |>
+  select(Distribution, pi, type1_error, mean_F, var_F, mean_R2)
+
+# Missing Data
+miss_table <- miss |>
+  mutate(
+    Method = recode(
+      method,
+      "Complete data" = "Complete",
+      "Mean imputation" = "Mean Imputation",
+      "Linear imputation" = "Linear Imputation"
+    ),
+    Method = factor(
+      Method,
+      levels = c(
+        "Complete",
+        "Mean Imputation",
+        "CMIB",
+        "CMIT",
+        "Linear Imputation"
+      )
+    ),
+    type1_error = 100 * type1_error
+  ) |>
+  arrange(Method) |>
+  select(Method, type1_error, mean_F, var_F, mean_R2)
+```
+
+
+# Generating Tables
+```{r}
+# Variance table
+var_latex <- kable(
+  var_table,
+  format = "latex",
+  booktabs = TRUE,
+  digits = 2,
+  escape = FALSE,
+  col.names = c(
+    "Condition",
+    "Type I (\\%)",
+    "Mean $F$",
+    "Var $F$",
+    "Mean $R^2$"
+  ),
+  align = c("l", "r", "r", "r", "r")
+)
+
+# Outlier table
+out_latex <- kable(
+  out_table,
+  format = "latex",
+  booktabs = TRUE,
+  digits = 2,
+  escape = FALSE,
+  col.names = c(
+    "Outlier Dist.",
+    "$\\pi$",
+    "Type I (\\%)",
+    "Mean $F$",
+    "Var $F$",
+    "Mean $R^2$"
+  ),
+  align = c("l", "r", "r", "r", "r", "r")
+)
+
+# Missing data table
+miss_latex <- kable(
+  miss_table,
+  format = "latex",
+  booktabs = TRUE,
+  digits = 2,
+  escape = FALSE,
+  col.names = c(
+    "Method",
+    "Type I (\\%)",
+    "Mean $F$",
+    "Var $F$",
+    "Mean $R^2$"
+  ),
+  align = c("l", "r", "r", "r", "r")
+)
+```
+
+

@@ -15,7 +15,7 @@ okabe_ito <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00",
   "#CC79A7", "#999999")
 
 # Read and combine results, add 95% Monte Carlo intervals
-var_results <- var_results <- c(
+var_results <- c(
   "homogeneous" = "homo_data.csv",
   "heterogeneous-mean" = "hetero_mean_data.csv",
   "heterogeneous-block" = "hetero_beta_data.csv"
